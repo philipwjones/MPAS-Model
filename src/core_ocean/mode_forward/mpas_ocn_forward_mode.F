@@ -105,6 +105,10 @@ module ocn_forward_mode
 
    function ocn_forward_mode_init(domain, startTimeStamp) result(ierr)!{{{
 
+#ifdef MPAS_OPENACC
+      use ocn_gpu_support, only: ocn_gpu_copy_mesh_to_device,ocn_gpu_post_core_init
+#endif
+
       type (domain_type), intent(inout) :: domain
       character(len=*), intent(out) :: startTimeStamp
       integer :: ierr
@@ -315,6 +319,14 @@ module ocn_forward_mode
         config_maxMeshDensity = maxDensity_global
       endif
 
+#ifdef MPAS_OPENACC
+      !$omp master
+      call ocn_gpu_copy_mesh_to_device(domain)
+      !$omp end master
+  
+      call mpas_threading_barrier()
+#endif
+
       !
       ! Initialize core
       !
@@ -348,6 +360,14 @@ module ocn_forward_mode
 
          block => block % next
       end do
+
+#ifdef MPAS_OPENACC
+      !$omp master
+      call ocn_gpu_post_core_init(domain)
+      !$omp end master
+  
+      call mpas_threading_barrier()
+#endif
 
       if (config_conduct_tests) then
          call mpas_timer_start("test suite")
@@ -720,9 +740,17 @@ module ocn_forward_mode
 
    function ocn_forward_mode_finalize(domain) result(iErr)!{{{
 
+#ifdef MPAS_OPENACC
+      use ocn_gpu_support, only: ocn_gpu_delete_mesh_from_device
+#endif
+
       type (domain_type), intent(inout) :: domain
 
       integer :: ierr
+
+#ifdef MPAS_OPENACC
+      call ocn_gpu_delete_mesh_from_device(domain)
+#endif
 
       call mpas_dmpar_exch_group_destroy_reusable_buffers(domain, 'subcycleFields')
 

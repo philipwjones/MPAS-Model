@@ -99,34 +99,6 @@ pgi:
 	"OPENMP = $(OPENMP)" \
 	"CPPFLAGS = $(MODEL_FORMULATION) -D_MPI" )
 
-pgi-p8:
-	( $(MAKE) all \
-	"FC_PARALLEL = mpif90" \
-	"CC_PARALLEL = mpicc" \
-	"CXX_PARALLEL = mpicxx" \
-	"FC_SERIAL = pgf90" \
-	"CC_SERIAL = pgcc" \
-	"CXX_SERIAL = pgc++" \
-	"FFLAGS_PROMOTION = -r8" \
-	"FFLAGS_OPT = -g -O3 -byteswapio -Mfree -I${MPI_LIB}" \
-	"FFLAGS_ACC = -acc -Minfo=accel -Mcuda=cuda9.0 -ta=tesla:cc60 -DMPAS_GPTL_TIMERS=1 -I${MPAS_LIBS}/include" \
-	"CFLAGS_ACC = -acc -Minfo=accel -Mcuda=cuda9.0 -ta=tesla:cc60 -DMPAS_GPTL_TIMERS=1 -I${MPAS_LIBS}/include"  \
-	"OPENACC = $(OPENACC)" \
-	"CFLAGS_OPT = -g -O3 " \
-	"CXXFLAGS_OPT = -g -O3 " \
-	"LDFLAGS_OPT = -g -O3 -L/usr/projects/icapt/libs-mpas/ompi-pg18/lib" \
-	"FFLAGS_DEBUG = -O0 -g -Mbounds -Mchkptr -byteswapio -Mfree -Ktrap=divz,fp,inv,ovf -I${MPI_LIB}" \
-	"CFLAGS_DEBUG = -O0 -g " \
-	"CXXFLAGS_DEBUG = -O0 -g " \
-	"LDFLAGS_DEBUG = -O0 -g -Mbounds -Mchkptr -Ktrap=divz,fp,inv,ovf  -L${MPAS_LIBS}/lib" \
-	"FFLAGS_OMP = -mp" \
-	"CFLAGS_OMP = -mp" \
-	"CORE = $(CORE)" \
-	"DEBUG = $(DEBUG)" \
-	"USE_PAPI = $(USE_PAPI)" \
-	"OPENMP = $(OPENMP)" \
-	"CPPFLAGS = -DpgiFortran -D_MPI -DUNDERSCORE" )
-
 pgi-p9:
 	( $(MAKE) all \
 	"FC_PARALLEL = mpif90" \
@@ -136,19 +108,21 @@ pgi-p9:
 	"CC_SERIAL = pgcc" \
 	"CXX_SERIAL = pgc++" \
 	"FFLAGS_PROMOTION = -r8" \
-	"FFLAGS_OPT = -g -O3 -byteswapio -Mfree " \
-	"FFLAGS_ACC = -acc -Mcuda=cuda9.0 -ta=tesla:cc70 -DMPAS_GPTL_TIMERS=1 -I${MPAS_LIBS}/include" \
-	"CFLAGS_ACC = -acc -Mcuda=cuda9.0 -ta=tesla:cc70 -DMPAS_GPTL_TIMERS=1 -I${MPAS_LIBS}/include"  \
+	"FFLAGS_OPT = -g -O3 -byteswapio -Mfree" \
+	"FFLAGS_ACC = -acc -Minfo=accel -ta=tesla:cc70,cc60,deepcopy,nollvm -I${MPAS_LIBS}/include" \
+	"CFLAGS_ACC = -acc -Minfo=accel -ta=tesla:cc70,cc60,deepcopy,nollvm -I${MPAS_LIBS}/include"  \
 	"OPENACC = $(OPENACC)" \
 	"CFLAGS_OPT = -g -O3 " \
 	"CXXFLAGS_OPT = -g -O3 " \
-	"LDFLAGS_OPT = -g -O3 -L/usr/projects/icapt/libs-mpas/ompi-pg18/lib" \
-	"FFLAGS_DEBUG = -O0 -g -Mbounds -Mchkptr -byteswapio -Mfree -Ktrap=divz,fp,inv,ovf " \
+	"LDFLAGS_OPT = -g -O3 -L${MPAS_LIBS}/lib" \
+	"FFLAGS_DEBUG = -O0 -g -Mbounds -Mchkptr -byteswapio -Mfree -Ktrap=divz,fp,inv,ovf -I${MPI_LIB}" \
 	"CFLAGS_DEBUG = -O0 -g " \
 	"CXXFLAGS_DEBUG = -O0 -g " \
 	"LDFLAGS_DEBUG = -O0 -g -Mbounds -Mchkptr -Ktrap=divz,fp,inv,ovf  -L${MPAS_LIBS}/lib" \
 	"FFLAGS_OMP = -mp" \
 	"CFLAGS_OMP = -mp" \
+    "PICFLAG = -fpic" \
+    "BUILD_TARGET = $(@)" \
 	"CORE = $(CORE)" \
 	"DEBUG = $(DEBUG)" \
 	"USE_PAPI = $(USE_PAPI)" \
@@ -686,6 +660,8 @@ ifeq "$(USE_PIO2)" "true"
 	PIO_MESSAGE="Using the PIO 2 library."
 else # USE_PIO2 IF
 	PIO_MESSAGE="Using the PIO 1.x library."
+        FCINCLUDES += -I$(NETCDF_FORTRAN_PATH)/include
+        LIBS += -L$(NETCDF_FORTRAN_PATH)/lib -lnetcdff
 endif # USE_PIO2 IF
 
 ifdef TIMER_LIB
