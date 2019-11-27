@@ -896,7 +896,7 @@ contains
         !$omp master
                 
         !$acc parallel loop gang vector collapse(2) private(idx) &
-        !$acc          present(maxLevelCell,layerThickness,zMid,zTop,bottomDepth) async(2)
+        !$acc          present(maxLevelCell,layerThickness,zMid,zTop,bottomDepth) async(2) wait(1)
 #else      
         !$omp do schedule(runtime) private(k)
 #endif        
