@@ -829,7 +829,7 @@ contains
 #ifdef MPAS_OPENACC
       !$omp master  
       !$acc update device(density) async(1)
-      !$acc enter data copyin(ssh,zMid,zTop,BruntVaisalaFreqTop,bottomDepth,pressure) async(1)
+      !$acc enter data copyin(ssh,zMid,zTop,BruntVaisalaFreqTop,bottomDepth,pressure) async(2)
       !$omp end master        
 #endif        
 
@@ -896,7 +896,7 @@ contains
         !$omp master
                 
         !$acc parallel loop gang vector collapse(2) private(idx) &
-        !$acc          present(maxLevelCell,layerThickness,zMid,zTop,bottomDepth) async(2) wait(1)
+        !$acc          present(maxLevelCell,layerThickness,zMid,zTop,bottomDepth) async(2)
 #else      
         !$omp do schedule(runtime) private(k)
 #endif        
