@@ -137,7 +137,16 @@ contains
 
       nEdges = nEdgesArray( 1 )
 
-      !$omp do schedule(runtime)
+#ifdef MPAS_OPENACC
+	  !$omp master
+	  !$acc parallel loop copyin(vertAleTransportTop) &
+	  !$acc       firstprivate(w_dudzTopEdge) &
+	  !$acc       private(cell1, cell2, k, vertAleTransportTopEdge) &
+	  !$acc       present(normalVelocity,maxLevelEdgeTop,cellsOnEdge, &
+	  !$acc               edgeMask,tend,layerThicknessEdge) async(1)     
+#else
+      !$omp do schedule(runtime) private(cell1, cell2, k, vertAleTransportTopEdge)
+#endif      
       do iEdge = 1, nEdges
         cell1 = cellsOnEdge(1,iEdge)
         cell2 = cellsOnEdge(2,iEdge)
@@ -157,7 +166,12 @@ contains
           tend(k,iEdge) = tend(k,iEdge) - edgeMask(k, iEdge) * 0.5 * (w_dudzTopEdge(k) + w_dudzTopEdge(k+1))
         enddo
       enddo
+#ifdef MPAS_OPENACC
+	  !$acc update host(tend) async(1)
+	  !$omp end master
+#else
       !$omp end do
+#endif      
 
       deallocate(w_dudzTopEdge)
 

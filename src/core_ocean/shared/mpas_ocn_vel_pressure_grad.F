@@ -18,7 +18,7 @@
 !>
 !
 !-----------------------------------------------------------------------
-
+!#undef MPAS_OPENACC
 module ocn_vel_pressure_grad
 
    use mpas_timer
@@ -58,6 +58,7 @@ module ocn_vel_pressure_grad
    real (kind=RKIND), pointer :: config_common_level_weight
    logical :: pgradOn
    real (kind=RKIND) :: density0Inv, gdensity0Inv, inv12
+   real (kind=RKIND), dimension(:,:), allocatable :: JacobianTz,JacobianSz,T1,T2,S1,S2
 
 
 !***********************************************************************
@@ -131,23 +132,36 @@ contains
       !-----------------------------------------------------------------
 
       integer :: iEdge, k, cell1, cell2, iCell, kMax, nEdges
-      integer, pointer :: nVertLevels
+      integer, pointer :: nVertLevelsPtr
+      integer :: nVertLevels
       integer, dimension(:), pointer :: nEdgesArray
       integer, dimension(:), pointer :: maxLevelEdgeTop, maxLevelCell
       integer, dimension(:,:), pointer :: cellsOnEdge, edgeMask
 
       real (kind=RKIND), dimension(:), pointer :: dcEdge
-      real (kind=RKIND), dimension(:), allocatable :: JacobianDxDs,JacobianTz,JacobianSz,T1,T2,S1,S2
       real (kind=RKIND), dimension(:,:), allocatable :: FXTop, work1, work2
-      real (kind=RKIND) :: invdcEdge, pGrad, sumAJTop, AJTop, FC, FCPrev, alpha, beta
+      real (kind=RKIND) :: invdcEdge, pGrad, sumAJTop, AJTop, FC, FCPrev, alpha, beta, jacdd
+	  real (kind=RKIND) :: common_level_weight ! ACC can't transfer pointers to scalar
+      !real (kind=RKIND), dimension(:), allocatable :: JacobianDxDs,JacobianTz,JacobianSz,T1,T2,S1,S2
+      real (kind=RKIND), dimension(:), allocatable :: JacobianDxDs
 
       err = 0
-
+	  common_level_weight = config_common_level_weight
+	  
       if (.not. pgradOn) return
 
       call mpas_timer_start("pressure grad")
 
-      call mpas_pool_get_dimension(meshPool, 'nVertLevels',nVertLevels)
+#ifdef MPAS_OPENACC
+	  !$omp master
+	  if ( config_pressure_gradient_type.eq.'Jacobian_from_TS' ) then
+	     !$acc enter data copyin(inSituThermalExpansionCoeff, inSituSalineContractionCoeff) async(1)
+	  endif
+	  !$omp end master
+#endif
+
+      call mpas_pool_get_dimension(meshPool, 'nVertLevels',nVertLevelsPtr)
+      nVertLevels = nVertLevelsPtr
       call mpas_pool_get_dimension(meshPool, 'nEdgesArray', nEdgesArray)
       call mpas_pool_get_array(meshPool, 'maxLevelEdgeTop', maxLevelEdgeTop)
       call mpas_pool_get_array(meshPool, 'maxLevelCell', maxLevelCell)
@@ -237,8 +251,9 @@ contains
       elseif (config_pressure_gradient_type.eq.'Jacobian_from_density') then
 
          allocate(JacobianDxDs(nVertLevels))
-
-         !$omp do schedule(runtime)
+		 call mpas_threading_barrier()
+		 
+         !$omp do schedule(runtime) private(cell1, cell2, invdcEdge, k, pGrad)
          do iEdge=1,nEdges
             cell1 = cellsOnEdge(1,iEdge)
             cell2 = cellsOnEdge(2,iEdge)
@@ -261,7 +276,7 @@ contains
                ! note JacobianDxDs includes negative sign, so
                ! pGrad is - g/rho_0 dP/dx
 
-               pGrad = pGrad + gdensity0Inv * JacobianDxDs(k) * invdcEdge
+               pGrad = pGrad + gdensity0Inv * JacobianDxDs(iEdge) * invdcEdge
 
                tend(k,iEdge) = tend(k,iEdge) + pGrad
 
@@ -269,29 +284,55 @@ contains
          end do
          !$omp end do
 
+		 call mpas_threading_barrier()
+
          deallocate(JacobianDxDs)
 
      elseif (config_pressure_gradient_type.eq.'Jacobian_from_TS') then
 
-         allocate(JacobianDxDs(nVertLevels),JacobianTz(nVertLevels),JacobianSz(nVertLevels), T1(nVertLevels))
-         allocate(T2(nVertLevels), S1(nVertLevels), S2(nVertLevels))
+		 !$omp master
+         allocate(JacobianTz(nVertLevels, nedges),JacobianSz(nVertLevels, nedges), &
+                  T1(nVertLevels, nedges))
+         allocate(T2(nVertLevels, nedges), S1(nVertLevels, nedges), S2(nVertLevels, nedges))
+		 !$omp end master
 
-         !$omp do schedule(runtime)
+#ifdef MPAS_OPENACC
+		 ! ACC version gives diffs.  If this is compiled without ACC, then we get matching results.
+		 
+		 !$omp master
+		 !$acc enter data create(JacobianTz,JacobianSz, T1, T2, S1, S2) async(1)
+		 
+         !$acc parallel loop present(dcEdge, JacobianTz,JacobianSz, T1, T2, S1, S2, &
+         !$acc                       maxLevelEdgeTop, cellsOnEdge, tracers, density, pressure, &
+         !$acc                       zMid, edgeMask, tend, &
+         !$acc                       inSituThermalExpansionCoeff, inSituSalineContractionCoeff) &
+         !$acc               private(jacdd, cell1, cell2, invdcEdge, kMax, k, pGrad, alpha, beta) async(1)
+#else		 
+         !$omp do schedule(runtime) private(iEdge, jacdd, cell1, cell2, invdcEdge, kMax, k, pGrad, alpha, beta)
+#endif
          do iEdge=1,nEdges
             cell1 = cellsOnEdge(1,iEdge)
             cell2 = cellsOnEdge(2,iEdge)
             invdcEdge = 1.0_RKIND / dcEdge(iEdge)
             kMax = maxLevelEdgeTop(iEdge)
 
+
+#ifdef MPAS_OPENACC
+		    !$acc loop seq
+#endif
             ! copy T and S to local column arrays
-            T1(1:kMax) = tracers(indexT,1:kMax,cell1)
-            T2(1:kMax) = tracers(indexT,1:kMax,cell2)
-            S1(1:kMax) = tracers(indexS,1:kMax,cell1)
-            S2(1:kMax) = tracers(indexS,1:kMax,cell2)
+            do k = 1,kMax
+              T1(k,iEdge) = tracers(indexT,k,cell1)
+              S1(k,iEdge) = tracers(indexS,k,cell1)
+              T2(k,iEdge) = tracers(indexT,k,cell2)
+              S2(k,iEdge) = tracers(indexS,k,cell2)
+            end do
 
             ! compute J(T,z) and J(S,z) in Shchepetkin and McWilliams (2003) (7.16)
-            call pGrad_Jacobian_common_level(T1, T2 ,zMid(:,cell1),zMid(:,cell2),kMax,config_common_level_weight, JacobianTz)
-            call pGrad_Jacobian_common_level(S1, S2 ,zMid(:,cell1),zMid(:,cell2),kMax,config_common_level_weight, JacobianSz)
+            call pGrad_Jacobian_common_level(T1(:,iEdge), T2(:,iEdge),zMid(:,cell1),zMid(:,cell2),kMax, &
+            								 common_level_weight, JacobianTz(:,iEdge))
+            call pGrad_Jacobian_common_level(S1(:,iEdge), S2(:,iEdge),zMid(:,cell1),zMid(:,cell2),kMax, &
+                                             common_level_weight, JacobianSz(:,iEdge))
 
             ! In layer 1, use pressure for generalized coordinates
             ! pGrad = -1/density_0 (grad p_k + density g grad z_k^{mid})
@@ -302,6 +343,9 @@ contains
 
             tend(k,iEdge) = tend(k,iEdge) + pGrad
 
+#ifdef MPAS_OPENACC
+		    !$acc loop seq
+#endif
             do k=2,kMax
 
                ! Average alpha and beta over four data points of the Jacobian cell.
@@ -317,20 +361,30 @@ contains
                                    + density(k-1,cell2)*inSituSalineContractionCoeff(k-1,cell2) )
 
                ! Shchepetkin and McWilliams (2003) (7.16)
-               JacobianDxDs(k) = -alpha*JacobianTz(k) + beta*JacobianSz(k)
+               jacdd = -alpha*JacobianTz(k,iEdge) + beta*JacobianSz(k,iEdge)
 
                ! note JacobianDxDs includes negative sign, so
                ! pGrad is - g/rho_0 dP/dx
 
-               pGrad = pGrad + gdensity0Inv * JacobianDxDs(k) * invdcEdge
+               pGrad = pGrad + gdensity0Inv * jacdd * invdcEdge
 
                tend(k,iEdge) = tend(k,iEdge) + pGrad
 
             end do
          end do
+#ifdef MPAS_OPENACC
+		 !$acc update host(tend) async(1)
+		 !$omp end master		 	
+#else         
          !$omp end do
-
-         deallocate(JacobianDxDs,JacobianTz,JacobianSz, T1, T2, S1, S2)
+#endif       
+  
+		 !$omp master
+#ifdef MPAS_OPENACC
+		 !$acc exit data delete(JacobianTz,JacobianSz, T1, T2, S1, S2)
+#endif		 
+         deallocate(JacobianTz,JacobianSz, T1, T2, S1, S2)
+		 !$omp end master
 
       else
 
@@ -339,6 +393,14 @@ contains
          err = 1
 
       endif
+
+#ifdef MPAS_OPENACC
+	  !$omp master
+	  if ( config_pressure_gradient_type.eq.'Jacobian_from_TS' ) then
+	     !$acc exit data delete(inSituThermalExpansionCoeff, inSituSalineContractionCoeff) async(1)
+	  endif   
+	  !$omp end master
+#endif
 
       call mpas_timer_stop("pressure grad")
 
@@ -360,6 +422,9 @@ contains
 !-----------------------------------------------------------------------
 
    subroutine pGrad_Jacobian_common_level(rho1,rho2,z1,z2,kMax,gamma,JacobianDxDs)
+#ifdef MPAS_OPENACC
+   !$acc routine seq
+#endif
 
       !-----------------------------------------------------------------
       !
