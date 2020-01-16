@@ -147,14 +147,14 @@ contains
 
       nEdges = nEdgesArray( 1 )
       mxlvl = maxval(maxLevelEdgeTop)
-	  
+
 #ifdef MPAS_OPENACC
 	  !$omp master
 	  !$acc parallel loop gang vector collapse(2) &
 	  !$acc          present(maxLevelEdgeTop,cellsOnEdge,dcEdge,nEdgesOnEdge, &
 	  !$acc                  edgesOnEdge,weightsOnEdge,normalizedRelativeVorticityEdge, &
 	  !$acc                  normalizedPlanetaryVorticityEdge,layerThicknessEdge, tend, &
-	  !$acc                  edgeMask,kineticEnergyCell) &
+	  !$acc                  edgeMask,kineticEnergyCell,normalVelocity) &
 	  !$acc         private(work, cell1, cell2, invLength, j, eoe, nve, edgeWeight, workVorticity) async(1)
 #else
       !$omp do schedule(runtime) private(work, cell1, cell2, invLength, k, j, eoe, nve, edgeWeight, workVorticity)

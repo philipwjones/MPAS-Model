@@ -139,10 +139,9 @@ contains
 
 #ifdef MPAS_OPENACC
 	  !$omp master
-	  !$acc parallel loop copyin(vertAleTransportTop) &
-	  !$acc       firstprivate(w_dudzTopEdge) &
-	  !$acc       private(cell1, cell2, k, vertAleTransportTopEdge) &
-	  !$acc       present(normalVelocity,maxLevelEdgeTop,cellsOnEdge, &
+	  !$acc parallel loop &
+	  !$acc       private(w_dudzTopEdge,cell1, cell2, k, vertAleTransportTopEdge) &
+	  !$acc       present(normalVelocity,maxLevelEdgeTop,cellsOnEdge, vertAleTransportTop, &
 	  !$acc               edgeMask,tend,layerThicknessEdge) async(1)     
 #else
       !$omp do schedule(runtime) private(cell1, cell2, k, vertAleTransportTopEdge)
@@ -151,6 +150,7 @@ contains
         cell1 = cellsOnEdge(1,iEdge)
         cell2 = cellsOnEdge(2,iEdge)
 
+        w_dudzTopEdge(1) = 0.0_RKIND
         do k = 2, maxLevelEdgeTop(iEdge)
           ! Average w from cell center to edge
           vertAleTransportTopEdge = 0.5_RKIND*(vertAleTransportTop(k,cell1) + vertAleTransportTop(k,cell2))

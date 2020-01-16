@@ -312,7 +312,7 @@ contains
 #ifdef MPAS_OPENACC
       !$omp master
       !$acc enter data copyin(normalizedRelativeVorticityEdge, normalizedPlanetaryVorticityEdge, zMid, &
-      !$acc                   pressure, density, activeTracers, potentialDensity, &
+      !$acc                   pressure, density, activeTracers, potentialDensity, vertAleTransportTop, &
       !$acc                   normalVelocity, kineticEnergyCell, tend_normalVelocity, layerThicknessEdge) async(1)
       !$omp end master
 #endif
@@ -403,7 +403,7 @@ contains
       !$acc wait
 
       !$acc exit data delete(normalizedRelativeVorticityEdge, normalizedPlanetaryVorticityEdge, zMid, &
-      !$acc                   pressure, density, activeTracers, potentialDensity, &
+      !$acc                   pressure, density, activeTracers, potentialDensity, vertAleTransportTop, &
       !$acc                   normalVelocity, kineticEnergyCell, tend_normalVelocity, layerThicknessEdge)
       !$omp end master
 #endif

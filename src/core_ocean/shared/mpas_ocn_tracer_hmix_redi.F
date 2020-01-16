@@ -346,7 +346,7 @@ contains
 #ifdef MPAS_OPENACC
 	     !$omp master
          !$acc parallel loop collapse(2) private(cell1, cell2) &
-         !$acc present(maxLevelEdgeTop,gradTracerEdge,tracers,dcEdge) &
+         !$acc present(cellsOnEdge,maxLevelEdgeTop,gradTracerEdge,tracers,dcEdge) &
          !$acc async(1)
 #else
          !$omp do schedule(runtime) private(cell1, cell2, k)
@@ -373,7 +373,7 @@ contains
 #ifdef MPAS_OPENACC
 	     !$omp master
          !$acc parallel loop collapse(2) private(cell1, cell2) &
-         !$acc present(maxLevelEdgeTop,gradTracerEdge,tracers,dcEdge) &
+         !$acc present(cellsOnEdge,dTracerdZTopOfEdge,dTracerdZTopOfCell,maxLevelEdgeTop,gradTracerEdge,tracers,dcEdge) &
          !$acc async(2)
 #else
          !$omp do schedule(runtime) private(cell1, cell2, k)
@@ -420,7 +420,7 @@ contains
 #ifdef MPAS_OPENACC
 	     !$omp master
          !$acc parallel loop collapse(2) private(k, h1, h2) &
-         !$acc present(maxLevelEdgeTop,gradTracerEdge,gradTracerTopOfEdge) &
+         !$acc present(layerThicknessEdge,maxLevelEdgeTop,gradTracerEdge,gradTracerTopOfEdge) &
          !$acc async(1)
 #else
          !$omp do schedule(runtime) private(k, h1, h2)
