@@ -264,13 +264,13 @@ module ocn_tracer_advection_mono
 	  !$acc      copyin(tracers,layerThickness, advCoefs, advCoefs3rd, &
 	  !$acc             normalThicknessFlux,w, &
 	  !$acc             nAdvCellsForEdge,advCellsForEdge,highOrderAdvectionMask, &
-	  !$acc             tmpTend) async(1)
+	  !$acc             tmpTend)
 
       if (computeBudgets) then
 	     !$acc enter data copyin(activeTracerHorizontalAdvectionTendency, &
 	     !$acc             activeTracerVerticalAdvectionTendency, &
 	     !$acc             activeTracerVerticalAdvectionTopFlux, &
-	     !$acc             activeTracerHorizontalAdvectionEdgeFlux) async(1)
+	     !$acc             activeTracerHorizontalAdvectionEdgeFlux)
 	  endif   
 #endif
       !$omp end master
@@ -309,9 +309,6 @@ module ocn_tracer_advection_mono
         end do
       end do
 #ifdef MPAS_OPENACC
-      if (monotonicityCheck) then
-    	  !$acc update host(hProv,hProvInv,hNewInv) async(1)
-      endif
 	  !$omp end master
 #else	  
       !$omp end do
@@ -538,7 +535,6 @@ module ocn_tracer_advection_mono
           end do ! k loop
         end do ! iCell loop
 #ifdef MPAS_OPENACC
-	    !!$acc update host(workTend,flxIn,flxOut) async(1)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -575,7 +571,6 @@ module ocn_tracer_advection_mono
    		   enddo     
         end do ! iEdge loop
 #ifdef MPAS_OPENACC
-	  !!$acc update host(highOrderFlx) async(1)
 	  !$omp end master
 #else	  
       !$omp end do
@@ -621,11 +616,6 @@ module ocn_tracer_advection_mono
            end do ! k loop
         end do ! iCell loop
 #ifdef MPAS_OPENACC
-        if (monotonicityCheck) then
-	       !$acc update host(tracerCur,tracerMin,tracerMax) async(1)
-        endif
-	    !!$acc update host(tracerCur,tmpTend,workTend) async(1)
-	    !!$acc update host(workTend) async(1)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -660,7 +650,6 @@ module ocn_tracer_advection_mono
            enddo
            enddo
 #ifdef MPAS_OPENACC
-	    !$acc update host(activeTracerHorizontalAdvectionEdgeFlux) async(1)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -685,7 +674,6 @@ module ocn_tracer_advection_mono
            end do
            end do ! iCell loop
 #ifdef MPAS_OPENACC
-	    !$acc update host(activeTracerHorizontalAdvectionTendency) async(1)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -696,8 +684,9 @@ module ocn_tracer_advection_mono
         if (monotonicityCheck) then
 #ifdef MPAS_OPENACC
 	       !$omp master
-	       !!$acc update host(tracerCur,tracerMin,tracerMax) async(1)
 	       !$acc wait
+           !$acc update host(hProv,hProvInv,hNewInv)
+	       
 	       !$omp end master
 	       
 	       !$omp barrier
@@ -757,7 +746,6 @@ module ocn_tracer_advection_mono
           end do ! k loop
         end do ! iCell loop
 #ifdef MPAS_OPENACC
-	    !!$acc update host(highOrderFlx) async(1)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -1135,7 +1123,6 @@ module ocn_tracer_advection_mono
           end do ! k loop
         end do ! iCell loop
 #ifdef MPAS_OPENACC
-	    !$acc update host(workTend,tmpTend) async(1)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -1147,7 +1134,6 @@ module ocn_tracer_advection_mono
         call mpas_timer_start('advect diags')
 #endif
         if (computeBudgets) then
-        call mpas_timer_start('advect diags - budget')
            mxLevel = maxval(maxLevelCell)
 #ifdef MPAS_OPENACC
 	       !$omp master
@@ -1172,24 +1158,22 @@ module ocn_tracer_advection_mono
               end do
            end do ! iCell loop
 #ifdef MPAS_OPENACC
-   	       !$acc update host(activeTracerVerticalAdvectionTopFlux, &
-   	       !$acc             activeTracerVerticalAdvectionTendency) async(1)
 	       !$omp end master
 #else
            !$omp end do
 #endif
-        call mpas_timer_stop('advect diags - budget')
         end if ! computeBudgets
 
         if (monotonicityCheck) then
-        call mpas_timer_start('advect diags - mono')
           nCells = nCellsArray( 1 )
 #ifdef MPAS_OPENACC
-		  !$omp master
-    	  !$acc wait
-    	  !$omp end master
-    	  !$omp barrier
-#endif    	  
+	       !$omp master
+	       !$acc wait
+           !$acc update host(workTend,tracerCur,tracerMin,tracerMax)	       
+	       !$omp end master
+	       
+	       !$omp barrier
+#endif
           
           ! Check for monotonicity of new tracer value
           !$omp do schedule(runtime)
@@ -1215,7 +1199,6 @@ module ocn_tracer_advection_mono
           end do
           end do
           !$omp end do
-        call mpas_timer_stop('advect diags - mono')
         end if ! monotonicity check
 #ifdef _ADV_TIMERS
         call mpas_timer_stop('advect diags')
@@ -1223,8 +1206,11 @@ module ocn_tracer_advection_mono
       end do ! iTracer loop
 
       nCells = nCellsArray( 1 )
+#ifdef MPAS_OPENACC
       !$omp master
       !$acc wait
+	  !$acc update host(tmpTend)
+#endif	  
       do iTracer = 1, numTracers
           do iCell = 1, nCells
              do k = 1, mxLevelCell
@@ -1234,8 +1220,10 @@ module ocn_tracer_advection_mono
     		 enddo
     	  enddo
 	  enddo
+#ifdef MPAS_OPENACC
 	  !$omp end master
 	  !$omp barrier
+#endif	  
 
 
 #ifdef _ADV_TIMERS
@@ -1244,8 +1232,12 @@ module ocn_tracer_advection_mono
       !$omp barrier
       !$omp master
 #ifdef MPAS_OPENACC
-	  !$acc wait
       if (computeBudgets) then
+   	     !$acc update host(activeTracerVerticalAdvectionTopFlux, &
+	     !$acc             activeTracerHorizontalAdvectionEdgeFlux, &
+	     !$acc             activeTracerHorizontalAdvectionTendency, &
+   	     !$acc             activeTracerVerticalAdvectionTendency)
+
 	     !$acc exit data delete(activeTracerHorizontalAdvectionTendency, &
 	     !$acc             activeTracerVerticalAdvectionTendency, &
 	     !$acc             activeTracerVerticalAdvectionTopFlux, &
@@ -1360,7 +1352,7 @@ module ocn_tracer_advection_mono
 
       ! Set flag for checking monotonicity
       monotonicityCheck = checkMonotonicity
-
+	  
    end subroutine ocn_tracer_advection_mono_init!}}}
 
 !|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
