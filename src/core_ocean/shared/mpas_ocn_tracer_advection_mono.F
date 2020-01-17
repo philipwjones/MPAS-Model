@@ -264,11 +264,13 @@ module ocn_tracer_advection_mono
 	  !$acc      copyin(tracers,layerThickness, advCoefs, advCoefs3rd, &
 	  !$acc             normalThicknessFlux,w, &
 	  !$acc             nAdvCellsForEdge,advCellsForEdge,highOrderAdvectionMask, &
-	  !$acc             activeTracerVerticalAdvectionTendency, tmpTend) async(1)
+	  !$acc             tmpTend) async(1)
 
       if (computeBudgets) then
 	     !$acc enter data copyin(activeTracerHorizontalAdvectionTendency, &
-	     !$acc             activeTracerHorizontalAdvectionEdgeFlux) async(2)
+	     !$acc             activeTracerVerticalAdvectionTendency, &
+	     !$acc             activeTracerVerticalAdvectionTopFlux, &
+	     !$acc             activeTracerHorizontalAdvectionEdgeFlux) async(1)
 	  endif   
 #endif
       !$omp end master
@@ -307,7 +309,9 @@ module ocn_tracer_advection_mono
         end do
       end do
 #ifdef MPAS_OPENACC
-	  !$acc update host(hProv,hProvInv,hNewInv) async(1)
+      if (monotonicityCheck) then
+    	  !$acc update host(hProv,hProvInv,hNewInv) async(1)
+      endif
 	  !$omp end master
 #else	  
       !$omp end do
@@ -340,7 +344,6 @@ module ocn_tracer_advection_mono
            end do ! k loop
         end do ! iCell loop
 #ifdef MPAS_OPENACC
-	  !!$acc update host(tracerCur) async(1)
 	  !$omp end master
 #else	  
       !$omp end do
@@ -383,7 +386,7 @@ module ocn_tracer_advection_mono
           end do
         end do
 #ifdef MPAS_OPENACC
-	    !$acc update host(tracerMin,tracerMax) async(1)
+	    !!$acc update host(tracerMin,tracerMax) async(1)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -438,7 +441,7 @@ module ocn_tracer_advection_mono
 		   enddo
         end do ! iEdge loop
 #ifdef MPAS_OPENACC
-	    !$acc update host(lowOrderFlx,highOrderFlx) async(1)
+	    !!$acc update host(lowOrderFlx,highOrderFlx) async(1)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -535,7 +538,7 @@ module ocn_tracer_advection_mono
           end do ! k loop
         end do ! iCell loop
 #ifdef MPAS_OPENACC
-	    !$acc update host(workTend,flxIn,flxOut) async(1)
+	    !!$acc update host(workTend,flxIn,flxOut) async(1)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -572,7 +575,7 @@ module ocn_tracer_advection_mono
    		   enddo     
         end do ! iEdge loop
 #ifdef MPAS_OPENACC
-	    !$acc update host(highOrderFlx) async(1)
+	  !!$acc update host(highOrderFlx) async(1)
 	  !$omp end master
 #else	  
       !$omp end do
@@ -618,8 +621,11 @@ module ocn_tracer_advection_mono
            end do ! k loop
         end do ! iCell loop
 #ifdef MPAS_OPENACC
+        if (monotonicityCheck) then
+	       !$acc update host(tracerCur,tracerMin,tracerMax) async(1)
+        endif
 	    !!$acc update host(tracerCur,tmpTend,workTend) async(1)
-	    !$acc update host(workTend) async(1)
+	    !!$acc update host(workTend) async(1)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -666,7 +672,7 @@ module ocn_tracer_advection_mono
 		   !$omp master
            !$acc parallel loop gang vector collapse(2) &
            !$acc               present(maxLevelCell,activeTracerHorizontalAdvectionTendency, &
-           !$acc                       workTend) async(2)
+           !$acc                       workTend) async(1)
 #else           
            !$omp do schedule(runtime)
 #endif           
@@ -679,7 +685,7 @@ module ocn_tracer_advection_mono
            end do
            end do ! iCell loop
 #ifdef MPAS_OPENACC
-	    !$acc update host(activeTracerHorizontalAdvectionTendency) async(2)
+	    !$acc update host(activeTracerHorizontalAdvectionTendency) async(1)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -690,8 +696,8 @@ module ocn_tracer_advection_mono
         if (monotonicityCheck) then
 #ifdef MPAS_OPENACC
 	       !$omp master
-	       !$acc update host(tracerCur,tracerMin,tracerMax) async(1)
-	       !$acc wait(1)
+	       !!$acc update host(tracerCur,tracerMin,tracerMax) async(1)
+	       !$acc wait
 	       !$omp end master
 	       
 	       !$omp barrier
@@ -751,7 +757,7 @@ module ocn_tracer_advection_mono
           end do ! k loop
         end do ! iCell loop
 #ifdef MPAS_OPENACC
-	    !$acc update host(highOrderFlx,workTend) async(1)
+	    !!$acc update host(highOrderFlx) async(1)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -771,7 +777,7 @@ module ocn_tracer_advection_mono
 #ifdef MPAS_OPENACC
 		!$omp master
         !$acc parallel loop gang &
-        !$acc               present(tracerMax,tracerMin,tracerCur) async(2)
+        !$acc               present(tracerMax,tracerMin,tracerCur) async(1)
 #else           
         !$omp do schedule(runtime)
 #endif           
@@ -792,7 +798,7 @@ module ocn_tracer_advection_mono
 #ifdef MPAS_OPENACC
 		!$omp master
         !$acc parallel loop gang vector collapse(2) &
-        !$acc               present(maxLevelCell,tracerMax,tracerMin,tracerCur) async(2)
+        !$acc               present(maxLevelCell,tracerMax,tracerMin,tracerCur) async(1)
 #else           
         !$omp do schedule(runtime)
 #endif           
@@ -817,7 +823,7 @@ module ocn_tracer_advection_mono
 #ifdef MPAS_OPENACC
 		!$omp master
         !$acc parallel loop gang private(kmax) &
-        !$acc               present(maxLevelCell,tracerMax,tracerMin,tracerCur) async(2)
+        !$acc               present(maxLevelCell,tracerMax,tracerMin,tracerCur) async(1)
 #else           
         !$omp do schedule(runtime)
 #endif           
@@ -830,7 +836,6 @@ module ocn_tracer_advection_mono
                                       tracerCur(kmax-1,iCell))
         end do ! cell loop
 #ifdef MPAS_OPENACC
-	    !$acc update host(tracerMin,tracerMax) async(2)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -930,7 +935,7 @@ module ocn_tracer_advection_mono
 #ifdef MPAS_OPENACC
 		!$omp master
         !$acc parallel loop gang private(kmax,k,verticalWeightK,verticalWeightKm1) &
-        !$acc               present(hProv,w,lowOrderFlx,highOrderFlx,tracerCur,maxLevelCell) async(2) wait(1)
+        !$acc               present(hProv,w,lowOrderFlx,highOrderFlx,tracerCur,maxLevelCell) async(1)
 #else           
         !$omp do schedule(runtime)
 #endif           
@@ -970,7 +975,7 @@ module ocn_tracer_advection_mono
 #ifdef MPAS_OPENACC
 		!$omp master
         !$acc parallel loop gang private(kmax,k,verticalWeightK,verticalWeightKm1) &
-        !$acc               present(lowOrderFlx,w,highOrderFlx,tracerCur,maxLevelCell) async(2)
+        !$acc               present(lowOrderFlx,w,highOrderFlx,tracerCur,maxLevelCell) async(1)
 #else           
         !$omp do schedule(runtime)
 #endif           
@@ -987,7 +992,6 @@ module ocn_tracer_advection_mono
           end do ! k loop
         end do ! iCell Loop
 #ifdef MPAS_OPENACC
-	    !$acc update host(highOrderFlx,lowOrderFlx) async(2)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -998,7 +1002,7 @@ module ocn_tracer_advection_mono
         !$acc parallel loop gang private(k) &
         !$acc               present(hProv,lowOrderFlx,highOrderFlx,tracerCur,maxLevelCell, &
         !$acc               workTend,flxIn,flxOut) &
-        !$acc async(2)
+        !$acc async(1)
 #else           
         !$omp do schedule(runtime)
 #endif           
@@ -1015,7 +1019,6 @@ module ocn_tracer_advection_mono
           end do ! k Loop
         end do ! iCell Loop
 #ifdef MPAS_OPENACC
-	    !$acc update host(workTend,flxIn,flxOut) async(2)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -1037,7 +1040,7 @@ module ocn_tracer_advection_mono
         !$acc parallel loop gang vector collapse(2) &
         !$acc               private(tracerMinNew,tracerMaxNew,tracerUpwindNew,scaleFactor) &
         !$acc               present(hProv,hNewInv,tracerCur,maxLevelCell, &
-        !$acc                       workTend,flxIn,flxOut,tracerMax,tracerMin) async(2)
+        !$acc                       workTend,flxIn,flxOut,tracerMax,tracerMin) async(1)
 #else           
         !$omp do schedule(runtime)
 #endif           
@@ -1070,7 +1073,6 @@ module ocn_tracer_advection_mono
           end do ! k loop
         end do ! iCell loop
 #ifdef MPAS_OPENACC
-	    !$acc update host(flxIn,flxOut) async(2)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -1088,7 +1090,7 @@ module ocn_tracer_advection_mono
         !$acc parallel loop gang vector collapse(2) &
         !$acc               private(flux) &
         !$acc               present(maxLevelCell, &
-        !$acc                       flxIn,flxOut,highOrderFlx) async(2)
+        !$acc                       flxIn,flxOut,highOrderFlx) async(1)
 #else           
         !$omp do schedule(runtime)
 #endif           
@@ -1107,7 +1109,6 @@ module ocn_tracer_advection_mono
           end do ! k loop
         end do ! iCell loop
 #ifdef MPAS_OPENACC
-	    !$acc update host(highOrderFlx) async(2)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -1117,7 +1118,7 @@ module ocn_tracer_advection_mono
 		!$omp master
         !$acc parallel loop gang vector collapse(2) &
         !$acc               present(maxLevelCell, highOrderFlx, &
-        !$acc                       workTend,tmpTend) async(2)
+        !$acc                       workTend,tmpTend) async(1)
 #else           
         !$omp do schedule(runtime)
 #endif           
@@ -1134,7 +1135,7 @@ module ocn_tracer_advection_mono
           end do ! k loop
         end do ! iCell loop
 #ifdef MPAS_OPENACC
-	    !$acc update host(workTend,tmpTend) async(2)
+	    !$acc update host(workTend,tmpTend) async(1)
 	    !$omp end master
 #else	  
         !$omp end do
@@ -1146,31 +1147,45 @@ module ocn_tracer_advection_mono
         call mpas_timer_start('advect diags')
 #endif
         if (computeBudgets) then
+        call mpas_timer_start('advect diags - budget')
+           mxLevel = maxval(maxLevelCell)
 #ifdef MPAS_OPENACC
 	       !$omp master
-	       !$acc wait
-	       !$omp end master
-#endif
-
+	       !$acc parallel loop gang vector collapse(2) &
+	       !$acc          present(highOrderFlx,lowOrderFlx,workTend, &
+	       !$acc                  activeTracerVerticalAdvectionTopFlux, &
+	       !$acc                  activeTracerVerticalAdvectionTendency, &
+	       !$acc                  maxLevelCell) async(1)
+#else
            !$omp do schedule(runtime)
+#endif
            do iCell = 1, nCells
-              do k = 2, maxLevelCell(iCell)
-                 activeTracerVerticalAdvectionTopFlux(iTracer,k,iCell) = &
-                    lowOrderFlx(k,iCell) + highOrderFlx(k,iCell)
-              end do
-              do k = 1, maxLevelCell(iCell)
-                 activeTracerVerticalAdvectionTendency(iTracer,k,iCell) = &
-                    workTend(k,iCell)
+              do k = 1, mxLevel
+                 if ( k <=  maxLevelCell(iCell) ) then
+                    if ( k > 1 ) then
+                       activeTracerVerticalAdvectionTopFlux(iTracer,k,iCell) = &
+                          lowOrderFlx(k,iCell) + highOrderFlx(k,iCell)
+                    endif                    
+                    activeTracerVerticalAdvectionTendency(iTracer,k,iCell) = &
+                       workTend(k,iCell)
+                endif
               end do
            end do ! iCell loop
+#ifdef MPAS_OPENACC
+   	       !$acc update host(activeTracerVerticalAdvectionTopFlux, &
+   	       !$acc             activeTracerVerticalAdvectionTendency) async(1)
+	       !$omp end master
+#else
            !$omp end do
+#endif
+        call mpas_timer_stop('advect diags - budget')
         end if ! computeBudgets
 
         if (monotonicityCheck) then
+        call mpas_timer_start('advect diags - mono')
           nCells = nCellsArray( 1 )
 #ifdef MPAS_OPENACC
 		  !$omp master
-    	  !$acc update host(hProv,hProvInv,hNewInv) async(1)
     	  !$acc wait
     	  !$omp end master
     	  !$omp barrier
@@ -1200,6 +1215,7 @@ module ocn_tracer_advection_mono
           end do
           end do
           !$omp end do
+        call mpas_timer_stop('advect diags - mono')
         end if ! monotonicity check
 #ifdef _ADV_TIMERS
         call mpas_timer_stop('advect diags')
@@ -1208,6 +1224,7 @@ module ocn_tracer_advection_mono
 
       nCells = nCellsArray( 1 )
       !$omp master
+      !$acc wait
       do iTracer = 1, numTracers
           do iCell = 1, nCells
              do k = 1, mxLevelCell
@@ -1230,6 +1247,8 @@ module ocn_tracer_advection_mono
 	  !$acc wait
       if (computeBudgets) then
 	     !$acc exit data delete(activeTracerHorizontalAdvectionTendency, &
+	     !$acc             activeTracerVerticalAdvectionTendency, &
+	     !$acc             activeTracerVerticalAdvectionTopFlux, &
 	     !$acc             activeTracerHorizontalAdvectionEdgeFlux)
       endif
       
@@ -1238,8 +1257,7 @@ module ocn_tracer_advection_mono
 	  !$acc             tracers,layerThickness, advCoefs, advCoefs3rd, &
 	  !$acc             normalThicknessFlux,w, &
 	  !$acc             nAdvCellsForEdge,advCellsForEdge,highOrderAdvectionMask, &
-	  !$acc             activeTracerHorizontalAdvectionTendency, &
-	  !$acc             activeTracerVerticalAdvectionTendency, tmpTend)
+	  !$acc             tmpTend)
 #endif
       deallocate(tracerCur,    &
                  tracerMin,    &

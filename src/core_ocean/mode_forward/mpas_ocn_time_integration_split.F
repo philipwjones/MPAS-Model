@@ -17,7 +17,7 @@
 !>  time integration scheme
 !
 !-----------------------------------------------------------------------
-
+#undef MPAS_OPENACC
 
 module ocn_time_integration_split
 
@@ -151,7 +151,9 @@ module ocn_time_integration_split
 
       ! Dimensions
       integer :: nCells, nEdges
-      integer, pointer :: nCellsPtr, nEdgesPtr, nVertLevels, num_tracersGroup, startIndex, endIndex
+      integer, pointer :: nCellsPtr, nEdgesPtr, nVertLevelsPtr, num_tracersGroup, startIndex, endIndex
+      integer :: nVertLevels
+      
       integer, pointer :: indexTemperature, indexSalinity
       integer, pointer :: indexSurfaceVelocityZonal, indexSurfaceVelocityMeridional
       integer, pointer :: indexSSHGradientZonal, indexSSHGradientMeridional
@@ -277,8 +279,9 @@ module ocn_time_integration_split
          call mpas_pool_get_dimension(block % dimensions, 'nEdges', nEdgesPtr)
          call mpas_pool_get_dimension(block % dimensions, 'nCellsArray', nCellsArray)
          call mpas_pool_get_dimension(block % dimensions, 'nEdgesArray', nEdgesArray)
-         call mpas_pool_get_dimension(block % dimensions, 'nVertLevels', nVertLevels)
-
+         call mpas_pool_get_dimension(block % dimensions, 'nVertLevels', nVertLevelsPtr)
+         nVertLevels = nVertLevelsPtr
+         
          call mpas_pool_get_subpool(block % structs, 'state', statePool)
          call mpas_pool_get_subpool(statePool, 'tracers', tracersPool)
          call mpas_pool_get_subpool(block % structs, 'mesh', meshPool)
@@ -311,10 +314,31 @@ module ocn_time_integration_split
 
          nCells = nCellsPtr
          nEdges = nEdgesPtr
+#ifdef MPAS_OPENACC
+	     !$omp master	  
+	     !$acc enter data copyin(normalBaroclinicVelocityCur,normalVelocityCur,normalVelocityNew, &
+	     !$acc                   normalBaroclinicVelocityNew) async(1)
+	     
+         !if (associated(highFreqThicknessNew)) then
+	     !   !$acc enter data copyin(highFreqThicknessNew) async(1)
+         !endif
+         
+         !if (associated(lowFreqDivergenceNew)) then
+	     !   !$acc enter data copyin(lowFreqDivergenceNew) async(1)
+         !endif
+	     !$omp end master	  
+#endif	     
 
          ! Initialize * variables that are used to compute baroclinic tendencies below.
 
+#ifdef MPAS_OPENACC
+	     !$omp master	  
+	     !$acc parallel loop gang vector collapse(2) &
+	     !$acc          present(normalBaroclinicVelocityCur,normalVelocityCur,normalVelocityNew, &
+	     !$acc                   normalBaroclinicVelocityNew) async(1)
+#else	     
          !$omp do schedule(runtime) private(k)
+#endif         
          do iEdge = 1, nEdges
             do k = 1, nVertLevels !maxLevelEdgeTop % array(iEdge)
 
@@ -331,7 +355,12 @@ module ocn_time_integration_split
                normalBaroclinicVelocityNew(k,iEdge) = normalBaroclinicVelocityCur(k,iEdge)
             end do
          end do
+#ifdef MPAS_OPENACC
+         !$acc update host(normalBaroclinicVelocityCur,normalVelocityNew,normalBaroclinicVelocityNew) async(1)         
+	     !$omp end master
+#else
          !$omp end do
+#endif         
 
          !$omp do schedule(runtime) private(k)
          do iCell = 1, nCells
@@ -381,6 +410,12 @@ module ocn_time_integration_split
 
          block => block % next
       end do
+
+#ifdef MPAS_OPENACC
+	     !$omp master
+         !$acc wait         
+	     !$omp end master
+#endif	     
 
       call mpas_timer_stop("se prep")
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -530,8 +565,9 @@ module ocn_time_integration_split
             do while (associated(block))
                call mpas_pool_get_dimension(block % dimensions, 'nEdges', nEdgesPtr)
                call mpas_pool_get_dimension(block % dimensions, 'nEdgesArray', nEdgesArray)
-               call mpas_pool_get_dimension(block % dimensions, 'nVertLevels', nVertLevels)
-
+               call mpas_pool_get_dimension(block % dimensions, 'nVertLevels', nVertLevelsPtr)
+               nVertLevels = nVertLevelsPtr
+               
                call mpas_pool_get_subpool(block % structs, 'state', statePool)
                call mpas_pool_get_subpool(statePool, 'tracers', tracersPool)
                call mpas_pool_get_subpool(block % structs, 'mesh', meshPool)
@@ -645,7 +681,8 @@ module ocn_time_integration_split
             do while (associated(block))
                call mpas_pool_get_dimension(block % dimensions, 'nEdges', nEdgesPtr)
                call mpas_pool_get_dimension(block % dimensions, 'nEdgesArray', nEdgesArray)
-               call mpas_pool_get_dimension(block % dimensions, 'nVertLevels', nVertLevels)
+               call mpas_pool_get_dimension(block % dimensions, 'nVertLevels', nVertLevelsPtr)
+               nVertLevels = nVertLevelsPtr
 
                call mpas_pool_get_subpool(block % structs, 'state', statePool)
                call mpas_pool_get_subpool(statePool, 'tracers', tracersPool)
@@ -1106,6 +1143,35 @@ module ocn_time_integration_split
 
               end do !do BtrCorIter=1,config_n_btr_cor_iter
 
+#ifdef MPAS_OPENACC
+              !$omp master
+              !$acc wait
+              block => domain % blocklist
+              do while (associated(block))
+				 call mpas_pool_get_array(statePool, 'normalBaroclinicVelocity', normalBaroclinicVelocityCur, 1)
+				 call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocityCur, 1)
+
+				 call mpas_pool_get_array(statePool, 'normalBaroclinicVelocity', normalBaroclinicVelocityNew, 2)
+				 call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocityNew, 2)
+				 call mpas_pool_get_array(statePool, 'highFreqThickness', highFreqThicknessNew, 2)
+				 call mpas_pool_get_array(statePool, 'lowFreqDivergence', lowFreqDivergenceNew, 2)
+!				 if (associated(highFreqThicknessNew)) then
+!					!$acc exit data delete(highFreqThicknessNew)
+!				 endif
+!		 
+!				 if (associated(lowFreqDivergenceNew)) then
+!					!$acc exit data delete(lowFreqDivergenceNew)
+!				 endif
+
+		         !$acc exit data delete(normalBaroclinicVelocityCur,normalVelocityCur,normalVelocityNew, &
+                 !$acc                   normalBaroclinicVelocityNew)
+                 block => block % next
+              end do  ! block
+              !$omp end master
+              
+              call mpas_threading_barrier()
+#endif
+
               !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
               ! Barotropic subcycle: SSH CORRECTOR STEP
               !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1334,7 +1400,8 @@ module ocn_time_integration_split
             do while (associated(block))
                call mpas_pool_get_dimension(block % dimensions, 'nEdges', nEdgesPtr)
                call mpas_pool_get_dimension(block % dimensions, 'nEdgesArray', nEdgesArray)
-               call mpas_pool_get_dimension(block % dimensions, 'nVertLevels', nVertLevels)
+               call mpas_pool_get_dimension(block % dimensions, 'nVertLevels', nVertLevelsPtr)
+               nVertLevels = nVertLevelsPtr
 
                call mpas_pool_get_subpool(block % structs, 'state', statePool)
                call mpas_pool_get_subpool(statePool, 'tracers', tracersPool)
@@ -1524,7 +1591,8 @@ module ocn_time_integration_split
             call mpas_pool_get_dimension(block % dimensions, 'nEdges', nEdgesPtr)
             call mpas_pool_get_dimension(block % dimensions, 'nCellsArray', nCellsArray)
             call mpas_pool_get_dimension(block % dimensions, 'nEdgesArray', nEdgesArray)
-            call mpas_pool_get_dimension(block % dimensions, 'nVertLevels', nVertLevels)
+            call mpas_pool_get_dimension(block % dimensions, 'nVertLevels', nVertLevelsPtr)
+            nVertLevels = nVertLevelsPtr
 
             call mpas_pool_get_subpool(block % structs, 'mesh', meshPool)
             call mpas_pool_get_subpool(block % structs, 'state', statePool)
