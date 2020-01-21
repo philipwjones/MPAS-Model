@@ -258,20 +258,27 @@ module ocn_tracer_advection_mono
                workTend    (nVertLevels  ,nCells), &
                lowOrderFlx (nVertLevels+1,max(nCells,nEdges)), &
                highOrderFlx(nVertLevels+1,max(nCells,nEdges)))
+               
 #ifdef MPAS_OPENACC
-	  !$acc enter data create(hProvInv,hNewInv,hProv,tracerCur,workTend,flxIn,flxOut, &
-	  !$acc             tracerMax,tracerMin,highOrderFlx,lowOrderFlx) &
-	  !$acc      copyin(tracers,layerThickness, advCoefs, advCoefs3rd, &
-	  !$acc             normalThicknessFlux,w, &
-	  !$acc             nAdvCellsForEdge,advCellsForEdge,highOrderAdvectionMask, &
-	  !$acc             tmpTend)
-
       if (computeBudgets) then
-	     !$acc enter data copyin(activeTracerHorizontalAdvectionTendency, &
-	     !$acc             activeTracerVerticalAdvectionTendency, &
-	     !$acc             activeTracerVerticalAdvectionTopFlux, &
-	     !$acc             activeTracerHorizontalAdvectionEdgeFlux)
-	  endif   
+		  !$acc enter data create(hProvInv,hNewInv,hProv,tracerCur,workTend,flxIn,flxOut, &
+		  !$acc             tracerMax,tracerMin,highOrderFlx,lowOrderFlx) &
+		  !$acc      copyin(tracers,layerThickness, advCoefs, advCoefs3rd, &
+		  !$acc             normalThicknessFlux,w, &
+		  !$acc             nAdvCellsForEdge,advCellsForEdge,highOrderAdvectionMask, &
+		  !$acc             activeTracerHorizontalAdvectionTendency, &
+          !$acc             activeTracerVerticalAdvectionTendency, &
+          !$acc             activeTracerVerticalAdvectionTopFlux, &
+          !$acc             activeTracerHorizontalAdvectionEdgeFlux, &
+		  !$acc             tmpTend) async(1)
+      else
+		  !$acc enter data create(hProvInv,hNewInv,hProv,tracerCur,workTend,flxIn,flxOut, &
+		  !$acc             tracerMax,tracerMin,highOrderFlx,lowOrderFlx) &
+		  !$acc      copyin(tracers,layerThickness, advCoefs, advCoefs3rd, &
+		  !$acc             normalThicknessFlux,w, &
+		  !$acc             nAdvCellsForEdge,advCellsForEdge,highOrderAdvectionMask, &
+		  !$acc             tmpTend) async(1)
+      endif
 #endif
       !$omp end master
       !$omp barrier
@@ -650,6 +657,9 @@ module ocn_tracer_advection_mono
            enddo
            enddo
 #ifdef MPAS_OPENACC
+           if ( iTracer .eq. numTracers ) then
+     	     !$acc update host(activeTracerHorizontalAdvectionEdgeFlux) async(1)
+           endif
 	    !$omp end master
 #else	  
         !$omp end do
@@ -674,7 +684,10 @@ module ocn_tracer_advection_mono
            end do
            end do ! iCell loop
 #ifdef MPAS_OPENACC
-	    !$omp end master
+           if ( iTracer .eq. numTracers ) then
+     	     !$acc update host(activeTracerHorizontalAdvectionTendency) async(1)
+           endif
+	       !$omp end master
 #else	  
         !$omp end do
 #endif
@@ -1158,6 +1171,10 @@ module ocn_tracer_advection_mono
               end do
            end do ! iCell loop
 #ifdef MPAS_OPENACC
+           if ( iTracer .eq. numTracers ) then
+     	     !$acc update host(activeTracerVerticalAdvectionTopFlux, &
+     	     !$acc  		   activeTracerVerticalAdvectionTendency) async(1)
+           endif
 	       !$omp end master
 #else
            !$omp end do
@@ -1233,23 +1250,36 @@ module ocn_tracer_advection_mono
       !$omp master
 #ifdef MPAS_OPENACC
       if (computeBudgets) then
-   	     !$acc update host(activeTracerVerticalAdvectionTopFlux, &
-	     !$acc             activeTracerHorizontalAdvectionEdgeFlux, &
-	     !$acc             activeTracerHorizontalAdvectionTendency, &
-   	     !$acc             activeTracerVerticalAdvectionTendency)
-
-	     !$acc exit data delete(activeTracerHorizontalAdvectionTendency, &
-	     !$acc             activeTracerVerticalAdvectionTendency, &
-	     !$acc             activeTracerVerticalAdvectionTopFlux, &
-	     !$acc             activeTracerHorizontalAdvectionEdgeFlux)
+		  !$acc exit data delete(hProvInv,hNewInv,hProv,tracerCur,workTend,flxIn,flxOut, &
+		  !$acc             tracerMax,tracerMin,highOrderFlx,lowOrderFlx, &
+		  !$acc             tracers,layerThickness, advCoefs, advCoefs3rd, &
+		  !$acc             normalThicknessFlux,w, &
+		  !$acc             nAdvCellsForEdge,advCellsForEdge,highOrderAdvectionMask, &
+		  !$acc             activeTracerHorizontalAdvectionTendency, &
+          !$acc             activeTracerVerticalAdvectionTendency, &
+          !$acc             activeTracerVerticalAdvectionTopFlux, &
+          !$acc             activeTracerHorizontalAdvectionEdgeFlux, &
+		  !$acc             tmpTend)
+      		  
+!	     !$acc exit data delete(activeTracerHorizontalAdvectionTendency, &
+!	     !$acc             activeTracerVerticalAdvectionTendency, &
+!	     !$acc             activeTracerVerticalAdvectionTopFlux, &
+!	     !$acc             activeTracerHorizontalAdvectionEdgeFlux)
+      else
+		  !$acc exit data delete(hProvInv,hNewInv,hProv,tracerCur,workTend,flxIn,flxOut, &
+		  !$acc             tracerMax,tracerMin,highOrderFlx,lowOrderFlx, &
+		  !$acc             tracers,layerThickness, advCoefs, advCoefs3rd, &
+		  !$acc             normalThicknessFlux,w, &
+		  !$acc             nAdvCellsForEdge,advCellsForEdge,highOrderAdvectionMask, &
+		  !$acc             tmpTend)
       endif
       
-	  !$acc exit data delete(hProvInv,hNewInv,hProv,tracerCur,workTend,flxIn,flxOut, &
-	  !$acc             tracerMax,tracerMin,highOrderFlx,lowOrderFlx, &
-	  !$acc             tracers,layerThickness, advCoefs, advCoefs3rd, &
-	  !$acc             normalThicknessFlux,w, &
-	  !$acc             nAdvCellsForEdge,advCellsForEdge,highOrderAdvectionMask, &
-	  !$acc             tmpTend)
+!	  !$acc exit data delete(hProvInv,hNewInv,hProv,tracerCur,workTend,flxIn,flxOut, &
+!	  !$acc             tracerMax,tracerMin,highOrderFlx,lowOrderFlx, &
+!	  !$acc             tracers,layerThickness, advCoefs, advCoefs3rd, &
+!	  !$acc             normalThicknessFlux,w, &
+!	  !$acc             nAdvCellsForEdge,advCellsForEdge,highOrderAdvectionMask, &
+!	  !$acc             tmpTend)
 #endif
       deallocate(tracerCur,    &
                  tracerMin,    &
