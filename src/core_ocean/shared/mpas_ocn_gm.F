@@ -1189,43 +1189,6 @@ contains
                                    gmStreamFuncTopOfEdge(:, iEdge), N)
          end if
       end do            
-!      do iEdge = 1, nEdges
-!         hi = maxLevelEdgeTop(iEdge)
-!         cell1 = cellsOnEdge(1,iEdge)
-!         cell2 = cellsOnEdge(2,iEdge)
-!
-!         ! Construct the tridiagonal matrix
-!         if (maxLevelEdgeTop(iEdge) .GE. 3) then
-!            ! First row		
-!            ! Second to next to the last rows
-!            do k = 2, hi
-!               gmStreamFuncTopOfEdge(k,iEdge) = 0.0_RKIND
-!               ltem = layerThicknessEdge(k, iEdge)
-!               ltem1 = layerThicknessEdge(k-1, iEdge)
-!               c = 2.0_RKIND * cGMphaseSpeed(iEdge)**2
-!               BruntVaisalaFreqTopEdge = 0.5_RKIND * (BruntVaisalaFreqTop(k,cell1) + BruntVaisalaFreqTop(k,cell2))
-!               BruntVaisalaFreqTopEdge = max(BruntVaisalaFreqTopEdge, 0.0_RKIND)
-!               if ( k > 2 ) then
-!                  tridiagA(k-2) = c / ltem1 &
-!                             / (ltem1 + ltem)
-!               endif
-!               tridiagB(k-1) = - c / (ltem1 &
-!                             * ltem ) - BruntVaisalaFreqTopEdge
-!               if ( k < maxLevelEdgeTop(iEdge) ) then              
-!                  tridiagC(k-1) = c / ltem &
-!                             / (ltem1 + ltem)
-!               endif              
-!               rightHandSide(k-1) = kappaGM3D(k-1,iEdge) * coeff * gradDensityConstZTopOfEdge(k,iEdge)
-!            end do
-!
-!            ! Total number of rows
-!            N = hi - 1
-!
-!            ! Call the tridiagonal solver
-!            call tridiagonal_solve(tridiagA, tridiagB, tridiagC, rightHandSide, bTemp,rTemp,lo, hi, &
-!                                   gmStreamFuncTopOfEdge(:, iEdge), N)
-!         end if
-!      end do            
 #ifdef MPAS_OPENACC
       !$acc update host(gmStreamFuncTopOfEdge) async(2)
       !$omp end master

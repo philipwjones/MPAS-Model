@@ -302,15 +302,15 @@ contains
 
 #ifdef MPAS_OPENACC
 	  !$omp master
-	  !$acc enter data copyin(tangentialVelocity, relativeVorticityCell, kiteAreasOnVertex, cellsOnVertex, &
-	  !$acc                  maxLevelVertexBot, areaTriangle, layerThickness, fVertex, density, &
-      !$acc                  normalVelocity, kiteIndexOnCell, maxLevelEdgeBot, divergence, normalVelocitySurfaceLayer, &
+	  !$acc enter data copyin(tangentialVelocity, relativeVorticityCell, kiteAreasOnVertex, &
+	  !$acc                  maxLevelVertexBot, layerThickness, fVertex, density, &
+      !$acc                  normalVelocity, maxLevelEdgeBot, divergence, normalVelocitySurfaceLayer, &
       !$acc                  kineticEnergyCell,normalizedPlanetaryVorticityVertex, normalizedRelativeVorticityEdge, &
       !$acc                  normalizedRelativeVorticityCell, normalizedPlanetaryVorticityEdge, &
       !$acc                  normalizedRelativeVorticityVertex,tracersSurfaceLayerValue,indexSurfaceLayerDepth, &
       !$acc                  normalTransportVelocity,normalGMBolusVelocity, &
       !$acc                  activeTracers, layerThicknessEdge) &
-      !$acc            create(relativeVorticity, relativeVorticityCell,invAreaCell,tmp_press(pow2,nCells)) async(1)
+      !$acc            create(relativeVorticity, relativeVorticityCell,invAreaCell,tmp_press(pow2,nCells))
       
 	  !$omp end master
 #endif
@@ -1365,9 +1365,9 @@ contains
 
       !$acc exit data delete(ssh,zMid,zTop,pressure,BruntVaisalaFreqTop,bottomDepth)
 
-	  !$acc exit data delete(tangentialVelocity, relativeVorticityCell, kiteAreasOnVertex, cellsOnVertex, &
-	  !$acc                  maxLevelVertexBot, areaTriangle, layerThickness, fVertex, density, &
-      !$acc                  normalVelocity, kiteIndexOnCell, maxLevelEdgeBot, divergence, normalVelocitySurfaceLayer, &
+	  !$acc exit data delete(tangentialVelocity, relativeVorticityCell, kiteAreasOnVertex, &
+	  !$acc                  maxLevelVertexBot, layerThickness, fVertex, density, &
+      !$acc                  normalVelocity, maxLevelEdgeBot, divergence, normalVelocitySurfaceLayer, &
       !$acc                  kineticEnergyCell, normalizedPlanetaryVorticityVertex, normalizedRelativeVorticityEdge, &
       !$acc                  normalizedRelativeVorticityCell, normalizedPlanetaryVorticityEdge, &
       !$acc                  normalizedRelativeVorticityVertex,tracersSurfaceLayerValue,indexSurfaceLayerDepth, &

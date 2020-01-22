@@ -45,8 +45,9 @@ contains
       integer, dimension(:), pointer :: nEdgesArray, nCellsArray, nEdgesOnEdge, &
       									nEdgesOnCell, maxLevelCell, maxLevelEdgeTop
       integer, dimension(:,:), pointer :: edgesOnEdge, cellsOnEdge, verticesOnEdge, cellsOnCell, &
+                                        kiteIndexOnCell, cellsOnVertex, &
       									edgesOnCell, edgeMask, verticesOnCell, edgeSignOnCell
-      real (kind=RKIND), dimension(:), pointer :: fEdge, dcEdge, dvEdge, areaCell
+      real (kind=RKIND), dimension(:), pointer :: fEdge, dcEdge, dvEdge, areaCell, areaTriangle
       real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge
 
 	  block => domain % blocklist
@@ -67,12 +68,16 @@ contains
 	     call mpas_pool_get_array(meshPool, 'dcEdge', dcEdge)
          call mpas_pool_get_array(meshPool, 'dvEdge', dvEdge)
 	     call mpas_pool_get_array(meshPool, 'areaCell', areaCell)
+         call mpas_pool_get_array(meshPool, 'areaTriangle', areaTriangle)
          call mpas_pool_get_array(meshPool, 'cellsOnEdge', cellsOnEdge)
          call mpas_pool_get_array(meshPool, 'verticesOnEdge', verticesOnEdge)
          call mpas_pool_get_array(meshPool, 'verticesOnCell', verticesOnCell)
+         call mpas_pool_get_array(meshPool, 'kiteIndexOnCell', kiteIndexOnCell)
+         call mpas_pool_get_array(meshPool, 'cellsOnVertex', cellsOnVertex)
            
          !$acc enter data copyin(nEdgesOnEdge, maxLevelEdgeTop, nEdgesOnCell, edgesOnEdge, &
          !$acc                   edgesOnCell, edgeSignOnCell, edgeMask, cellsOnCell, maxLevelCell, &
+         !$acc                   areaTriangle, kiteIndexOnCell, cellsOnVertex, &
          !$acc                   weightsOnEdge,fEdge,dcEdge,dvEdge,areaCell,cellsOnEdge, &
          !$acc                   verticesOnEdge,verticesOnCell) async(1)
             
@@ -100,8 +105,9 @@ contains
       integer, dimension(:), pointer :: nEdgesArray, nCellsArray, nEdgesOnEdge, &
       									nEdgesOnCell, maxLevelCell, maxLevelEdgeTop
       integer, dimension(:,:), pointer :: edgesOnEdge, cellsOnEdge, verticesOnEdge, cellsOnCell, &
+                                        kiteIndexOnCell, cellsOnVertex, &
       									edgesOnCell, edgeMask, verticesOnCell, edgeSignOnCell
-      real (kind=RKIND), dimension(:), pointer :: fEdge, dcEdge, dvEdge, areaCell
+      real (kind=RKIND), dimension(:), pointer :: fEdge, dcEdge, dvEdge, areaCell, areaTriangle
       real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge
 
 	  block => domain % blocklist
@@ -122,12 +128,16 @@ contains
 	     call mpas_pool_get_array(meshPool, 'dcEdge', dcEdge)
          call mpas_pool_get_array(meshPool, 'dvEdge', dvEdge)
 	     call mpas_pool_get_array(meshPool, 'areaCell', areaCell)
+         call mpas_pool_get_array(meshPool, 'areaTriangle', areaTriangle)
          call mpas_pool_get_array(meshPool, 'cellsOnEdge', cellsOnEdge)
          call mpas_pool_get_array(meshPool, 'verticesOnEdge', verticesOnEdge)
          call mpas_pool_get_array(meshPool, 'verticesOnCell', verticesOnCell)
+         call mpas_pool_get_array(meshPool, 'kiteIndexOnCell', kiteIndexOnCell)
+         call mpas_pool_get_array(meshPool, 'cellsOnVertex', cellsOnVertex)
            
          !$acc exit data delete(nEdgesOnEdge, maxLevelEdgeTop, nEdgesOnCell, edgesOnEdge, &
          !$acc                   edgesOnCell, edgeSignOnCell, edgeMask, cellsOnCell, maxLevelCell, &
+         !$acc                   areaTriangle, kiteIndexOnCell, cellsOnVertex, &
          !$acc                   weightsOnEdge,fEdge,dcEdge,dvEdge,areaCell,cellsOnEdge, &
          !$acc                   verticesOnEdge,verticesOnCell) async(1)
             

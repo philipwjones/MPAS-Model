@@ -109,7 +109,7 @@ module ocn_time_integration_split
       type (dm_info) :: dminfo
       integer :: iCell, i,k,j, iEdge, cell1, cell2, split_explicit_step, split, &
                  eoe, oldBtrSubcycleTime, newBtrSubcycleTime, uPerpTime, BtrCorIter, &
-                 stage1_tend_time
+                 stage1_tend_time, mxlvl
       integer, dimension(:), allocatable :: n_bcl_iter
       type (block_type), pointer :: block
       real (kind=RKIND) :: normalThicknessFluxSum, thicknessSum, flux, sshEdge, hEdge1, &
@@ -317,15 +317,16 @@ module ocn_time_integration_split
 #ifdef MPAS_OPENACC
 	     !$omp master	  
 	     !$acc enter data copyin(normalBaroclinicVelocityCur,normalVelocityCur,normalVelocityNew, &
-	     !$acc                   normalBaroclinicVelocityNew) async(1)
+	     !$acc                   normalBaroclinicVelocityNew,sshNew,sshCur,layerThicknessNew, &
+	     !$acc                   layerThicknessCur,vertAleTransportTop) async(1)
 	     
-         !if (associated(highFreqThicknessNew)) then
-	     !   !$acc enter data copyin(highFreqThicknessNew) async(1)
-         !endif
+         if (associated(highFreqThicknessNew)) then
+	        !$acc enter data copyin(highFreqThicknessNew) async(1)
+         endif
          
-         !if (associated(lowFreqDivergenceNew)) then
-	     !   !$acc enter data copyin(lowFreqDivergenceNew) async(1)
-         !endif
+         if (associated(lowFreqDivergenceNew)) then
+	        !$acc enter data copyin(lowFreqDivergenceNew) async(1)
+         endif
 	     !$omp end master	  
 #endif	     
 
@@ -362,16 +363,46 @@ module ocn_time_integration_split
          !$omp end do
 #endif         
 
+         mxlvl = maxval(maxLevelCell)
+#ifdef MPAS_OPENACC
+	     !$omp master	  
+	     !$acc parallel loop &
+	     !$acc          present(sshNew,sshCur) async(1)
+#else	     
          !$omp do schedule(runtime) private(k)
+#endif         
          do iCell = 1, nCells
             sshNew(iCell) = sshCur(iCell)
-            do k = 1, maxLevelCell(iCell)
-               layerThicknessNew(k,iCell) = layerThicknessCur(k,iCell)
-               ! set vertAleTransportTop to zero for stage 1 velocity tendency, first time through.
-               vertAleTransportTop(k,iCell) = 0.0_RKIND
+         end do
+#ifdef MPAS_OPENACC
+         !$acc update host(sshNew) async(1)         
+	     !$omp end master
+#else
+         !$omp end do
+#endif         
+
+#ifdef MPAS_OPENACC
+	     !$omp master	  
+	     !$acc parallel loop gang vector collapse(2) &
+	     !$acc          present(layerThicknessNew,vertAleTransportTop,layerThicknessCur) async(1)
+#else	     
+         !$omp do schedule(runtime) private(k)
+#endif         
+         do iCell = 1, nCells
+            do k = 1, mxlvl
+               if ( k <= maxLevelCell(iCell) ) then
+                  layerThicknessNew(k,iCell) = layerThicknessCur(k,iCell)
+                  ! set vertAleTransportTop to zero for stage 1 velocity tendency, first time through.
+                  vertAleTransportTop(k,iCell) = 0.0_RKIND
+               endif
             end do
          end do
+#ifdef MPAS_OPENACC
+         !$acc update host(layerThicknessNew,vertAleTransportTop) async(1)         
+	     !$omp end master
+#else
          !$omp end do
+#endif         
 
          call mpas_pool_begin_iteration(tracersPool)
          do while ( mpas_pool_get_next_member(tracersPool, groupItr))
@@ -392,6 +423,7 @@ module ocn_time_integration_split
          end do
 
 
+         mxlvl = size(highFreqThicknessNew,1)
          if (associated(highFreqThicknessNew)) then
             !$omp do schedule(runtime)
             do iCell = 1, nCells
@@ -1148,6 +1180,8 @@ module ocn_time_integration_split
               !$acc wait
               block => domain % blocklist
               do while (associated(block))
+				 call mpas_pool_get_subpool(block % structs, 'state', statePool)
+				 call mpas_pool_get_subpool(block % structs, 'diagnostics', diagnosticsPool)
 				 call mpas_pool_get_array(statePool, 'normalBaroclinicVelocity', normalBaroclinicVelocityCur, 1)
 				 call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocityCur, 1)
 
@@ -1155,16 +1189,24 @@ module ocn_time_integration_split
 				 call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocityNew, 2)
 				 call mpas_pool_get_array(statePool, 'highFreqThickness', highFreqThicknessNew, 2)
 				 call mpas_pool_get_array(statePool, 'lowFreqDivergence', lowFreqDivergenceNew, 2)
-!				 if (associated(highFreqThicknessNew)) then
-!					!$acc exit data delete(highFreqThicknessNew)
-!				 endif
-!		 
-!				 if (associated(lowFreqDivergenceNew)) then
-!					!$acc exit data delete(lowFreqDivergenceNew)
-!				 endif
+				 call mpas_pool_get_array(statePool, 'ssh', sshCur, 1)
+				 call mpas_pool_get_array(statePool, 'ssh', sshNew, 2)
+
+				 call mpas_pool_get_array(statePool, 'layerThickness', layerThicknessCur, 1)
+				 call mpas_pool_get_array(statePool, 'layerThickness', layerThicknessNew, 2)
+				 call mpas_pool_get_array(diagnosticsPool, 'vertAleTransportTop', vertAleTransportTop)
+
+				 if (associated(highFreqThicknessNew)) then
+					!$acc exit data delete(highFreqThicknessNew)
+				 endif
+		 
+				 if (associated(lowFreqDivergenceNew)) then
+					!$acc exit data delete(lowFreqDivergenceNew)
+				 endif
 
 		         !$acc exit data delete(normalBaroclinicVelocityCur,normalVelocityCur,normalVelocityNew, &
-                 !$acc                   normalBaroclinicVelocityNew)
+	             !$acc                  normalBaroclinicVelocityNew,sshNew,sshCur,layerThicknessNew, &
+	             !$acc                  layerThicknessCur,vertAleTransportTop)
                  block => block % next
               end do  ! block
               !$omp end master
