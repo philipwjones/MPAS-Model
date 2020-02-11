@@ -214,6 +214,7 @@ contains
 	  mxlvlEdge = maxval(maxLevelEdgeTop)
 	  mxlvlCell = maxval(maxLevelCell)
 	  
+      mxlvl = size(dTracerdZTopOfCell,1)
 #ifdef MPAS_OPENACC
 	  !$omp master
       !$acc parallel loop collapse(2) &
@@ -223,7 +224,7 @@ contains
       !$omp do schedule(runtime)
 #endif      
       do iCell = 1, nCells
-        do k = 1,mxlvlCell+1
+        do k = 1,mxlvl
            dTracerdZTopOfCell(k, iCell) = 0.0_RKIND
         end do
       end do
@@ -245,6 +246,25 @@ contains
       do iEdge = 1, nEdges
         do k = 1,mxlvl
            gradTracerEdge(k, iEdge) = 0.0_RKIND
+        end do
+      end do
+#ifdef MPAS_OPENACC
+	  !$omp end master
+#else
+      !$omp end do
+#endif      
+
+      mxlvl = size(gradTracerTopOfEdge,1)
+#ifdef MPAS_OPENACC
+	  !$omp master
+      !$acc parallel loop collapse(2) &
+      !$acc present(gradTracerEdge,gradTracerTopOfEdge,dTracerdZTopOfEdge) &
+      !$acc async(1)
+#else
+      !$omp do schedule(runtime)
+#endif      
+      do iEdge = 1, nEdges
+        do k = 1,mxlvl
            gradTracerTopOfEdge(k, iEdge) = 0.0_RKIND
            dTracerdZTopOfEdge(k, iEdge) = 0.0_RKIND
         end do
@@ -268,6 +288,25 @@ contains
       do iCell = 1, nCells
         do k = 1,mxlvl
            areaCellSum(k, iCell) = 1.0e-34_RKIND
+        end do
+      end do
+#ifdef MPAS_OPENACC
+	  !$omp end master
+#else
+      !$omp end do
+#endif      
+
+      mxlvl = size(gradHTracerSlopedTopOfCell,1)
+#ifdef MPAS_OPENACC
+	  !$omp master
+      !$acc parallel loop collapse(2) &
+      !$acc present(areaCellSum,gradHTracerSlopedTopOfCell) &
+      !$acc async(1)
+#else
+      !$omp do schedule(runtime)
+#endif      
+      do iCell = 1, nCells
+        do k = 1,mxlvl
            gradHTracerSlopedTopOfCell(k, iCell) = 0.0_RKIND
         end do
       end do
@@ -446,7 +485,7 @@ contains
          !$omp do schedule(runtime) private(k, h1, h2)
 #endif         
          do iEdge = 1, nEdges
-            do k=1,mxlvlEdge
+            do k=2,mxlvlEdge
                if ( k <= maxLevelEdgeTop(iEdge) ) then
                   h1 = layerThicknessEdge(k-1,iEdge)
                   h2 = layerThicknessEdge(k,iEdge)
@@ -513,25 +552,25 @@ contains
          nCells = nCellsArray( 1 )
          mxlvl = size(areaCellSum,1)
          
-#ifdef MPAS_OPENACC
-	     !$omp master
-         !$acc parallel loop collapse(2) &
-         !$acc present(areaCellSum,gradHTracerSlopedTopOfCell) &
-         !$acc async(1)
-#else
-         !$omp do schedule(runtime)
-#endif         
-         do iCell = 1, nCells
-            do k = 1, mxlvl
-               areaCellSum(k, iCell) = 1.0e-34_RKIND
-               gradHTracerSlopedTopOfCell(k, iCell) = 0.0_RKIND
-            end do
-         end do      
-#ifdef MPAS_OPENACC
-	    !$omp end master
-#else
-        !$omp end do
-#endif      
+!#ifdef MPAS_OPENACC
+!	     !$omp master
+!         !$acc parallel loop collapse(2) &
+!         !$acc present(areaCellSum,gradHTracerSlopedTopOfCell) &
+!         !$acc async(1)
+!#else
+!         !$omp do schedule(runtime)
+!#endif         
+!         do iCell = 1, nCells
+!            do k = 1, mxlvl
+!               areaCellSum(k, iCell) = 1.0e-34_RKIND
+!               gradHTracerSlopedTopOfCell(k, iCell) = 0.0_RKIND
+!            end do
+!         end do      
+!#ifdef MPAS_OPENACC
+!	    !$omp end master
+!#else
+!        !$omp end do
+!#endif      
 
 #ifdef MPAS_OPENACC
 		 ! ACC HOTSPOT
