@@ -372,13 +372,6 @@ contains
       !
       ! velocity tendency: pressure gradient
       !
-
-#ifdef MPAS_OPENACC
-      !$omp master
-      !$acc wait
-      call mpas_threading_barrier()
-      !$omp end master
-#endif
       
       if (config_pressure_gradient_type.eq.'Jacobian_from_TS') then
          ! only pass EOS derivatives if needed.
@@ -388,6 +381,12 @@ contains
               indexTemperature, indexSalinity, activeTracers, tend_normalVelocity, err, &
               inSituThermalExpansionCoeff,inSituSalineContractionCoeff)
       else
+#ifdef MPAS_OPENACC
+         !$omp master
+         !$acc wait
+         call mpas_threading_barrier()
+         !$omp end master
+#endif
          call ocn_vel_pressure_grad_tend(meshPool, ssh, pressure, montgomeryPotential, zMid, density, potentialDensity, &
               indexTemperature, indexSalinity, activeTracers, tend_normalVelocity, err, &
               inSituThermalExpansionCoeff,inSituSalineContractionCoeff)
