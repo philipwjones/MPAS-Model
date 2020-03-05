@@ -504,9 +504,10 @@ module ocn_time_integration_split
 		 if (associated(lowFreqDivergenceNew)) then
 			!$acc exit data delete(lowFreqDivergenceNew)
 		 endif
+!		 !$acc                  normalBaroclinicVelocityNew,sshNew,sshCur,layerThicknessNew, &
 
 		 !$acc exit data delete(normalBaroclinicVelocityCur,normalVelocityCur, normalVelocityNew, &
-		 !$acc                  normalBaroclinicVelocityNew,sshNew,sshCur,layerThicknessNew, &
+		 !$acc                  normalBaroclinicVelocityNew,sshNew,layerThicknessNew, &
 		 !$acc                  normalBarotropicVelocityCur, &
 		 !$acc                  layerThicknessCur,vertAleTransportTop)
 		 block => block % next
@@ -1885,6 +1886,12 @@ module ocn_time_integration_split
             call mpas_pool_get_array(diagnosticsPool, 'normalTransportVelocity', normalTransportVelocity)
             call mpas_pool_get_array(diagnosticsPool, 'vertAleTransportTop', vertAleTransportTop)
 
+#ifdef MPAS_OPENACC
+	        !$omp master	  
+            !$acc enter data copyin(vertAleTransportTop) async(1)
+            !$omp end master
+#endif
+            
             ! compute vertAleTransportTop.  Use normalTransportVelocity for advection of layerThickness and tracers.
             ! Use time level 1 values of layerThickness and layerThicknessEdge because
             ! layerThickness has not yet been computed for time level 2.
@@ -1901,6 +1908,12 @@ module ocn_time_integration_split
             call mpas_timer_stop('thick vert trans vel top')
 
             call ocn_tend_thick(tendPool, forcingPool, diagnosticsPool, meshPool)
+
+#ifdef MPAS_OPENACC
+	        !$omp master	  
+            !$acc exit data delete(vertAleTransportTop) async(1)
+            !$omp end master
+#endif
 
             block => block % next
          end do
@@ -2310,6 +2323,17 @@ module ocn_time_integration_split
 
       end do  ! split_explicit_step = 1, config_n_ts_iter
 
+#ifdef MPAS_OPENACC
+	  !$omp master	  
+      tmpblk => domain % blocklist
+      do while (associated(tmpblk))
+         call mpas_pool_get_array(statePool, 'ssh', sshCur, 1)
+         !$acc exit data delete(sshCur)
+         tmpblk => tmpblk % next
+      end do
+      !$omp end master	  		 		 
+#endif
+         
 !#ifdef MPAS_OPENACC
       call ocn_gpu_exit_integration(domain)
 !#endif      

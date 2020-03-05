@@ -1455,7 +1455,7 @@ contains
       !
       !-----------------------------------------------------------------
 
-      integer :: iEdge, iCell, k, i, nCells
+      integer :: iEdge, iCell, k, i, nCells, nlvl
       integer, pointer :: nVertLevels
       integer, dimension(:), pointer :: nCellsArray
       integer, dimension(:), pointer :: nEdgesOnCell, nEdgesOnEdge, &
@@ -1508,15 +1508,29 @@ contains
       projectedSSH => projectedSSHField % array
       ALE_Thickness => ALE_ThicknessField % array
 
-      !
-      ! thickness-weighted divergence and barotropic divergence
-      !
-      ! See Ringler et al. (2010) jcp paper, eqn 19, 21, and fig. 3.
+#ifdef MPAS_OPENACC
+	  !$omp master
+	  !$acc enter data copyin(div_hu,ALE_thickness,projectedSSH,maxLevelEdgeBot) async(1)
+	  !$omp end master
+#endif
+      nlvl = size(div_hu, 1)
+
+#ifdef MPAS_OPENACC
+	  !$omp master
+      !$acc parallel loop &
+      !$acc          present(areaCell,nEdgesOnCell,edgesOnCell,maxLevelEdgeBot,layerThicknessEdge, &
+      !$acc                  normalVelocity,dvEdge,edgeSignOnCell,projectedSSH,oldSSH,div_hu) &
+      !$acc          private(flux, iEdge, div_hu_btr, invAreaCell) async(1)
+#else
       !$omp do schedule(runtime) private(invAreaCell, i, iEdge, k, flux, div_hu_btr)
+#endif      
       do iCell = 1, nCells
-         div_hu(:,iCell) = 0.0_RKIND
          div_hu_btr = 0.0_RKIND
          invAreaCell = 1.0_RKIND / areaCell(iCell)
+         do k = 1, nlvl
+            div_hu(k,iCell) = 0.0_RKIND
+         end do
+         
          do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
 
@@ -1529,7 +1543,35 @@ contains
          end do
          projectedSSH(iCell) = oldSSH(iCell) - dt*div_hu_btr
       end do
+#ifdef MPAS_OPENACC
+	  !$acc update host(projectedSSH) async(1)
+      !$omp end master
+#else
       !$omp end do
+#endif      
+
+!      !
+!      ! thickness-weighted divergence and barotropic divergence
+!      !
+!      ! See Ringler et al. (2010) jcp paper, eqn 19, 21, and fig. 3.
+!      !$omp do schedule(runtime) private(invAreaCell, i, iEdge, k, flux, div_hu_btr)
+!      do iCell = 1, nCells
+!         div_hu(:,iCell) = 0.0_RKIND
+!         div_hu_btr = 0.0_RKIND
+!         invAreaCell = 1.0_RKIND / areaCell(iCell)
+!         do i = 1, nEdgesOnCell(iCell)
+!            iEdge = edgesOnCell(i, iCell)
+!
+!            do k = 1, maxLevelEdgeBot(iEdge)
+!               flux = layerThicknessEdge(k, iEdge) * normalVelocity(k, iEdge) * dvEdge(iEdge) * edgeSignOnCell(i, iCell) &
+!                    * invAreaCell
+!               div_hu(k,iCell) = div_hu(k,iCell) - flux
+!               div_hu_btr = div_hu_btr - flux
+!            end do
+!         end do
+!         projectedSSH(iCell) = oldSSH(iCell) - dt*div_hu_btr
+!      end do
+!      !$omp end do
 
       !
       ! Compute desired thickness at new time
@@ -1549,7 +1591,15 @@ contains
       ! Here we are using solving the continuity equation for vertAleTransportTop ($w^t$),
       ! and using ALE_Thickness for thickness at the new time.
 
+#ifdef MPAS_OPENACC
+	  !$omp master
+	  !$acc update host(ALE_thickness) async(1)
+      !$acc parallel loop &
+      !$acc          present(vertAleTransportTop,maxLevelCell,div_hu,ALE_Thickness,oldLayerThickness) &
+      !$acc          async(1)
+#else
       !$omp do schedule(runtime) private(k)
+#endif      
       do iCell = 1,nCells
          vertAleTransportTop(1,iCell) = 0.0_RKIND
          vertAleTransportTop(maxLevelCell(iCell)+1,iCell) = 0.0_RKIND
@@ -1558,7 +1608,21 @@ contains
               - (ALE_Thickness(k,iCell) - oldLayerThickness(k,iCell))/dt
          end do
       end do
+#ifdef MPAS_OPENACC
+	  !$acc update host(vertAleTransportTop) async(1)
+      !$omp end master
+#else
       !$omp end do
+#endif      
+
+#ifdef MPAS_OPENACC
+	  !$omp master
+	  !$acc wait
+	  
+      !$acc exit data delete(div_hu,ALE_thickness,projectedSSH,maxLevelEdgeBot) &
+      !$acc       async(1)
+      !$omp end master
+#endif
 
       call mpas_deallocate_scratch_field(div_huField, .true.)
       call mpas_deallocate_scratch_field(projectedSSHField, .true.)
