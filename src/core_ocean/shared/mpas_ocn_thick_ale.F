@@ -192,25 +192,6 @@ contains
 #else	     
          !$omp end do
 #endif         
-
-!         !$omp do schedule(runtime)
-!         do iCell = 1, nCells
-!            kMax = maxLevelCell(iCell)
-!   
-!            thicknessSum = 1e-14_RKIND
-!            do k = 1, kMax
-!               SSH_ALE_Thickness(k) = SSH(iCell) * vertCoordMovementWeights(k) * restingThickness(k, iCell)
-!               thicknessSum = thicknessSum + vertCoordMovementWeights(k) * restingThickness(k, iCell)
-!            end do
-!   
-!            ! Note that restingThickness is nonzero, and remaining terms are perturbations about zero.
-!            ! This is equation 4 and 6 in Petersen et al 2015, but with eqn 6
-!            do k = 1, kMax
-!               SSH_ALE_Thickness(k) = SSH_ALE_Thickness(k) / thicknessSum
-!               ALE_Thickness(k, iCell) = restingThickness(k, iCell) + SSH_ALE_Thickness(k)
-!            end do
-!         enddo
-!         !$omp end do
    
          elseif (configALEthicknessProportionality==2) then ! weights_only
          !$omp do schedule(runtime)
@@ -299,46 +280,11 @@ contains
 
          enddo
          !$omp end do
-
-!         !$omp do schedule(runtime)
-!         do iCell = 1, nCells
-!            kMax = maxLevelCell(iCell)
-!
-!            ! go down the column:
-!            prelim_ALE_Thickness(1:kMax) = ALE_Thickness(1:kMax, iCell)
-!            remainder = 0.0_RKIND
-!            do k = 1, kMax
-!               newThickness = max( min(prelim_ALE_Thickness(k) + remainder, &
-!                                      config_max_thickness_factor * restingThickness(k,iCell) ), &
-!                                  config_min_thickness)
-!               min_ALE_thickness_down(k) = newThickness - prelim_ALE_Thickness(k)
-!               remainder = remainder - min_ALE_thickness_down(k)
-!            end do
-!
-!            ! go back up the column:
-!            min_ALE_thickness_up(kMax) = 0.0_RKIND
-!            prelim_ALE_Thickness(1:kMax) = prelim_ALE_Thickness(1:kMax) + min_ALE_thickness_down(1:kMax)
-!            do k = kMax-1, 1, -1
-!               newThickness = max( min(prelim_ALE_Thickness(k) + remainder, &
-!                                      config_max_thickness_factor * restingThickness(k,iCell) ), &
-!                                  config_min_thickness)
-!               min_ALE_thickness_up(k) = newThickness - prelim_ALE_Thickness(k)
-!               remainder = remainder - min_ALE_thickness_up(k)
-!            end do
-!            min_ALE_thickness_up(1) = min_ALE_thickness_up(1) + remainder
-!
-!            ALE_Thickness(1:kMax, iCell) = ALE_Thickness(1:kMax, iCell) + min_ALE_thickness_down(1:kMax) &
-!                                         + min_ALE_thickness_up(1:kMax)
-!
-!         enddo
-!         !$omp end do
-
       endif ! config_use_min_max_thickness
 
 #ifdef MPAS_OPENACC
 	  !$omp master
-	  !!$acc update host(ALE_Thickness) async(1)
-      !$acc wait
+      !!$acc wait
       	  
       !$acc exit data delete(vertCoordMovementWeights,restingThickness) &
       !$acc       async(1)

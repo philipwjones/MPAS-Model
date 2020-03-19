@@ -1515,6 +1515,11 @@ contains
 #endif
       nlvl = size(div_hu, 1)
 
+      !
+      ! thickness-weighted divergence and barotropic divergence
+      !
+      ! See Ringler et al. (2010) jcp paper, eqn 19, 21, and fig. 3.
+
 #ifdef MPAS_OPENACC
 	  !$omp master
       !$acc parallel loop &
@@ -1549,29 +1554,6 @@ contains
 #else
       !$omp end do
 #endif      
-
-!      !
-!      ! thickness-weighted divergence and barotropic divergence
-!      !
-!      ! See Ringler et al. (2010) jcp paper, eqn 19, 21, and fig. 3.
-!      !$omp do schedule(runtime) private(invAreaCell, i, iEdge, k, flux, div_hu_btr)
-!      do iCell = 1, nCells
-!         div_hu(:,iCell) = 0.0_RKIND
-!         div_hu_btr = 0.0_RKIND
-!         invAreaCell = 1.0_RKIND / areaCell(iCell)
-!         do i = 1, nEdgesOnCell(iCell)
-!            iEdge = edgesOnCell(i, iCell)
-!
-!            do k = 1, maxLevelEdgeBot(iEdge)
-!               flux = layerThicknessEdge(k, iEdge) * normalVelocity(k, iEdge) * dvEdge(iEdge) * edgeSignOnCell(i, iCell) &
-!                    * invAreaCell
-!               div_hu(k,iCell) = div_hu(k,iCell) - flux
-!               div_hu_btr = div_hu_btr - flux
-!            end do
-!         end do
-!         projectedSSH(iCell) = oldSSH(iCell) - dt*div_hu_btr
-!      end do
-!      !$omp end do
 
       !
       ! Compute desired thickness at new time

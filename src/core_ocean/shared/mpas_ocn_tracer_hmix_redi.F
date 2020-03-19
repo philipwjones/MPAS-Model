@@ -552,26 +552,6 @@ contains
          nCells = nCellsArray( 1 )
          mxlvl = size(areaCellSum,1)
          
-!#ifdef MPAS_OPENACC
-!	     !$omp master
-!         !$acc parallel loop collapse(2) &
-!         !$acc present(areaCellSum,gradHTracerSlopedTopOfCell) &
-!         !$acc async(1)
-!#else
-!         !$omp do schedule(runtime)
-!#endif         
-!         do iCell = 1, nCells
-!            do k = 1, mxlvl
-!               areaCellSum(k, iCell) = 1.0e-34_RKIND
-!               gradHTracerSlopedTopOfCell(k, iCell) = 0.0_RKIND
-!            end do
-!         end do      
-!#ifdef MPAS_OPENACC
-!	    !$omp end master
-!#else
-!        !$omp end do
-!#endif      
-
 #ifdef MPAS_OPENACC
 		 ! ACC HOTSPOT
 	     !$omp master
