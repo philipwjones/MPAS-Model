@@ -150,7 +150,7 @@ module ocn_time_integration_split
       character (len=StrKIND), pointer :: config_land_ice_flux_mode
 
       real (kind=RKIND), pointer :: config_mom_del4, config_btr_gam1_velWt1Ptr, config_btr_gam2_SSHWt1Ptr
-      real (kind=RKIND)          :: config_btr_gam2_SSHWt1,config_btr_gam1_velWt1, inv_thick
+      real (kind=RKIND)          :: config_btr_gam2_SSHWt1,config_btr_gam1_velWt1, inv_thick, coeff
       real (kind=RKIND), pointer :: config_btr_gam3_velWt2
       real (kind=RKIND), pointer :: config_self_attraction_and_loading_beta
 
@@ -1057,6 +1057,8 @@ module ocn_time_integration_split
 
                      nEdges = nEdgesPtr
                      nEdges = nEdgesArray( edgeHaloComputeCounter )
+
+					 coeff = dt / nBtrSubcycles
 #ifdef MPAS_OPENACC
                      ! Getting diffs w/ GPU execution, but not CPU
                      
@@ -1076,8 +1078,6 @@ module ocn_time_integration_split
 #endif                     
                      do iEdge = 1, nEdges
 
-                        temp_mask = edgeMask(1, iEdge)
-
                           cell1 = cellsOnEdge(1,iEdge)
                           cell2 = cellsOnEdge(2,iEdge)
 
@@ -1090,9 +1090,9 @@ module ocn_time_integration_split
                           end do
 
                           normalBarotropicVelocitySubcycleNew(iEdge) &
-                            = temp_mask &
+                            = edgeMask(1, iEdge) &
                             * (normalBarotropicVelocitySubcycleCur(iEdge) &
-                            + dt / nBtrSubcycles * (CoriolisTerm - gravity &
+                            + coeff * (CoriolisTerm - gravity &
                             * (sshSubcycleCur(cell2) - sshSubcycleCur(cell1) ) &
                             / dcEdge(iEdge) + barotropicForcing(iEdge)))
 
