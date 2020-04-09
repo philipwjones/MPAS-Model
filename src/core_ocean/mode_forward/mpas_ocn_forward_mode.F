@@ -39,6 +39,7 @@ module ocn_forward_mode
    use ocn_tendency
    use ocn_diagnostics
    use ocn_test
+   use ocn_mesh
 
    use ocn_thick_hadv
    use ocn_thick_vadv
@@ -323,17 +324,13 @@ module ocn_forward_mode
         config_maxMeshDensity = maxDensity_global
       endif
 
-#ifdef MPAS_OPENACC
-      !$omp master
-      call ocn_gpu_copy_mesh_to_device(domain)
-      !$omp end master
-  
-      call mpas_threading_barrier()
-#endif
-
       !
       ! Initialize core
       !
+
+      ! fill the ocean mesh structure
+      call ocn_meshCreate(domain)
+
       timeStep = mpas_get_clock_timestep(domain % clock, ierr=err_tmp)
       call mpas_get_timeInterval(timeStep, dt=dt)
 
@@ -365,13 +362,8 @@ module ocn_forward_mode
          block => block % next
       end do
 
-#ifdef MPAS_OPENACC
-      !$omp master
-      call ocn_gpu_post_core_init(domain)
-      !$omp end master
-  
-      call mpas_threading_barrier()
-#endif
+      ! Update any mesh fields that may have been modified during init
+      call ocn_meshUpdateFields
 
       if (config_conduct_tests) then
          call mpas_timer_start("test suite")
@@ -744,17 +736,12 @@ module ocn_forward_mode
 
    function ocn_forward_mode_finalize(domain) result(iErr)!{{{
 
-#ifdef MPAS_OPENACC
-      use ocn_gpu_support, only: ocn_gpu_delete_mesh_from_device
-#endif
-
       type (domain_type), intent(inout) :: domain
 
       integer :: ierr
 
-#ifdef MPAS_OPENACC
-      call ocn_gpu_delete_mesh_from_device(domain)
-#endif
+      ! destroy the ocean mesh structure
+      call ocn_meshDestroy(ierr)
 
       call mpas_dmpar_exch_group_destroy_reusable_buffers(domain, 'subcycleFields')
 
