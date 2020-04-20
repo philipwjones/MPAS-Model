@@ -28,6 +28,7 @@ module ocn_tracer_hmix_redi
    use mpas_threading
 
    use ocn_constants
+   use ocn_mesh, only: ocnMesh
 
    implicit none
    private
@@ -133,7 +134,7 @@ contains
       integer, dimension(:,:), allocatable :: boundaryMask
 
       integer, dimension(:), pointer :: maxLevelEdgeTop, nEdgesOnCell, maxLevelCell
-      integer, dimension(:,:), pointer :: cellsOnEdge, edgesOnCell, edgeSignOnCell
+      integer, dimension(:,:), pointer :: cellsOnEdge, edgesOnCell
 
       real (kind=RKIND) :: invAreaCell1, invAreaCell2, invAreaCell, areaEdge, eflux
       real (kind=RKIND) :: tracer_turb_flux, flux, s_tmp, r_tmp, h1, h2, s_tmpU, s_tmpD, edge
@@ -141,7 +142,7 @@ contains
       real (kind=RKIND), dimension(:), pointer :: areaCell, dvEdge, dcEdge
 
       real (kind=RKIND), dimension(:,:), pointer :: gradTracerEdge, gradTracerTopOfEdge, gradHTracerSlopedTopOfCell, &
-         dTracerdZTopOfCell, dTracerdZTopOfEdge, areaCellSum
+         dTracerdZTopOfCell, dTracerdZTopOfEdge, areaCellSum, edgeSignOnCell
 
       type (field2DReal), pointer :: gradTracerEdgeField, gradTracerTopOfEdgeField, gradHTracerSlopedTopOfCellField, &
                                      dTracerdZTopOfCellField, dTracerdZTopOfEdgeField, areaCellSumField
@@ -152,6 +153,8 @@ contains
 
       call mpas_timer_start("tracer redi")
 
+      edgeSignOnCell => ocnMesh%edgeSignOnCell
+      
       call mpas_pool_get_dimension(meshPool, 'nCellsArray', nCellsArray)
       call mpas_pool_get_dimension(meshPool, 'nEdgesArray', nEdgesArray)
       call mpas_pool_get_dimension(meshPool, 'nVertLevels', nVertLevels)
@@ -166,7 +169,6 @@ contains
 
       call mpas_pool_get_array(meshPool, 'nEdgesOnCell', nEdgesOnCell)
       call mpas_pool_get_array(meshPool, 'edgesOnCell', edgesOnCell)
-      call mpas_pool_get_array(meshPool, 'edgeSignOnCell', edgeSignOnCell)
 
       call mpas_pool_get_config(ocnConfigs, 'config_Redi_kappa',config_Redi_kappaPtr)
       config_Redi_kappa = config_Redi_kappaPtr

@@ -28,6 +28,7 @@ module ocn_vel_pressure_grad
    use mpas_log
 
    use ocn_constants
+   use ocn_mesh, only: ocnMesh
 
    implicit none
    private
@@ -136,9 +137,10 @@ contains
       integer :: nVertLevels, mxcells, mxlvl
       integer, dimension(:), pointer :: nEdgesArray
       integer, dimension(:), pointer :: maxLevelEdgeTop, maxLevelCell
-      integer, dimension(:,:), pointer :: cellsOnEdge, edgeMask
+      integer, dimension(:,:), pointer :: cellsOnEdge
 
       real (kind=RKIND), dimension(:), pointer :: dcEdge
+      real (kind=RKIND), dimension(:,:), pointer :: edgeMask
       real (kind=RKIND), dimension(:,:), allocatable :: FXTop, work1, work2
       real (kind=RKIND) :: invdcEdge, pGrad, sumAJTop, AJTop, FC, FCPrev, alpha, beta, jacdd
 	  real (kind=RKIND) :: common_level_weight ! ACC can't transfer pointers to scalar
@@ -161,8 +163,9 @@ contains
       call mpas_pool_get_array(meshPool, 'maxLevelCell', maxLevelCell)
       call mpas_pool_get_array(meshPool, 'cellsOnEdge', cellsOnEdge)
       call mpas_pool_get_array(meshPool, 'dcEdge', dcEdge)
-      call mpas_pool_get_array(meshPool, 'edgeMask', edgeMask)
 
+      edgeMask => ocnMesh%edgeMask
+      
 #ifdef MPAS_OPENACC
 	  !$omp master
 	  if ( config_pressure_gradient_type.eq.'Jacobian_from_TS' ) then
@@ -458,7 +461,7 @@ contains
 !		 !$omp master
 !         !$acc parallel loop present(dcEdge, JacobianTz,JacobianSz, &
 !         !$acc                       maxLevelEdgeTop, cellsOnEdge, density, pressure, &
-!         !$acc                       zMid, edgeMask, tend, &
+!         !$acc                       zMid, ocnMesh%edgeMask, tend, &
 !         !$acc                       inSituThermalExpansionCoeff, inSituSalineContractionCoeff) &
 !         !$acc               private(jacdd, cell1, cell2, invdcEdge, kMax, k, pGrad, alpha, beta) async(1)
 !#else		 
@@ -479,7 +482,7 @@ contains
 !            ! In layer 1, use pressure for generalized coordinates
 !            ! pGrad = -1/density_0 (grad p_k + density g grad z_k^{mid})
 !            k = 1
-!            pGrad = edgeMask(k,iEdge) * invdcEdge * ( &
+!            pGrad = ocnMesh%edgeMask(k,iEdge) * invdcEdge * ( &
 !                 - density0Inv * ( pressure(k,cell2) - pressure(k,cell1) ) &
 !                 - gdensity0Inv * 0.5_RKIND*(density(k,cell1)+density(k,cell2)) * ( zMid(k,cell2) - zMid(k,cell1) ) )
 !

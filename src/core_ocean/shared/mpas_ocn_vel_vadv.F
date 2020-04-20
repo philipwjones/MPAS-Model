@@ -25,7 +25,8 @@ module ocn_vel_vadv
    use mpas_derived_types
    use mpas_pool_routines
    use ocn_constants
-
+   use ocn_mesh, only: ocnMesh
+   
    implicit none
    private
    save
@@ -115,10 +116,11 @@ contains
       integer, pointer :: nVertLevels
       integer, dimension(:), pointer :: nEdgesArray
       integer, dimension(:), pointer :: maxLevelEdgeTop
-      integer, dimension(:,:), pointer :: cellsOnEdge, edgeMask
+      integer, dimension(:,:), pointer :: cellsOnEdge
 
       real (kind=RKIND) :: vertAleTransportTopEdge
       real (kind=RKIND), dimension(:), allocatable :: w_dudzTopEdge
+      real (kind=RKIND), dimension(:,:), pointer :: edgeMask
 
       if (.not. velVadvOn) return
 
@@ -130,8 +132,9 @@ contains
       call mpas_pool_get_dimension(meshPool, 'nEdgesArray', nEdgesArray)
       call mpas_pool_get_array(meshPool, 'maxLevelEdgeTop', maxLevelEdgeTop)
       call mpas_pool_get_array(meshPool, 'cellsOnEdge', cellsOnEdge)
-      call mpas_pool_get_array(meshPool, 'edgeMask', edgeMask)
 
+      edgeMask => ocnMesh%edgeMask
+      
       allocate(w_dudzTopEdge(nVertLevels+1))
       w_dudzTopEdge = 0.0_RKIND
 

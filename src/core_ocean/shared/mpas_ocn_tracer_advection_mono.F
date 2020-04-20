@@ -131,9 +131,9 @@ module ocn_tracer_advection_mono
          maxLevelCell        !< [in] Index to max level at cell center
       integer, dimension(:), intent(in) :: &
          maxLevelEdgeTop     !< [in] Indx max edge lvl with both non-land cells
-      integer, dimension(:,:), intent(in) :: &
+      real (kind=RKIND), dimension(:,:), intent(in) :: &
          highOrderAdvectionMask !< [in] Mask for high order advection
-      integer, dimension(:,:), intent(in) :: &
+      real (kind=RKIND), dimension(:,:), intent(in) :: &
          edgeSignOnCell         !< [in] Sign for flux from edge on each cell
       type (mpas_pool_type), intent(in) :: &
          meshPool               !< [in] Mesh information
@@ -272,14 +272,14 @@ module ocn_tracer_advection_mono
 		  !$acc             tracerMax,tracerMin,highOrderFlx,lowOrderFlx) &
 		  !$acc      copyin(tracers,layerThickness, advCoefs, advCoefs3rd, &
 		  !$acc             normalThicknessFlux,w, &
-		  !$acc             nAdvCellsForEdge,advCellsForEdge,highOrderAdvectionMask, &
+		  !$acc             nAdvCellsForEdge,advCellsForEdge, &
 		  !$acc             tmpTend) async(1)
       else
 		  !$acc enter data create(hProvInv,hNewInv,hProv,tracerCur,workTend,flxIn,flxOut, &
 		  !$acc             tracerMax,tracerMin,highOrderFlx,lowOrderFlx) &
 		  !$acc      copyin(tracers,layerThickness, advCoefs, advCoefs3rd, &
 		  !$acc             normalThicknessFlux,w, &
-		  !$acc             nAdvCellsForEdge,advCellsForEdge,highOrderAdvectionMask, &
+		  !$acc             nAdvCellsForEdge,advCellsForEdge, &
 		  !$acc             tmpTend) async(1)
       endif
 #endif
@@ -432,7 +432,7 @@ module ocn_tracer_advection_mono
 	       	     cell1 = cellsOnEdge(1, iEdge)
                  cell2 = cellsOnEdge(2, iEdge)
 	   
-				 tracerWeight = xor(highOrderAdvectionMask(k, iEdge), 1) * (dvEdge(iEdge) * 0.5_RKIND) &
+				 tracerWeight = xor(int(highOrderAdvectionMask(k, iEdge)), 1) * (dvEdge(iEdge) * 0.5_RKIND) &
 						         * normalThicknessFlux(k, iEdge)
 						         
                  lowOrderFlx(k,iEdge) = dvEdge(iEdge) * &
@@ -1264,7 +1264,7 @@ module ocn_tracer_advection_mono
 	  !$acc             tracerMax,tracerMin,highOrderFlx,lowOrderFlx, &
 	  !$acc             tracers,layerThickness, advCoefs, advCoefs3rd, &
 	  !$acc             normalThicknessFlux,w, &
-	  !$acc             nAdvCellsForEdge,advCellsForEdge,highOrderAdvectionMask, &
+	  !$acc             nAdvCellsForEdge,advCellsForEdge, &
 	  !$acc             tmpTend)
 #endif
 

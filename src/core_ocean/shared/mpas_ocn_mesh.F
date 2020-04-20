@@ -77,8 +77,6 @@ module ocn_mesh
          cellsOnVertex,  &! index of cells connected to each vertex
          edgesOnVertex,  &! index of edges connected to each vertex
          kiteIndexOnCell,&! index of kite associated with each cell
-         edgeMask,       &! mask to denote active edges    with depth
-         edgeSignOnCell, &! sign of edge contributions to a cell
          advCellsForEdge  ! index of cells contrib to advective flux at edge
 
       real (kind=RKIND), dimension(:), pointer :: &
@@ -115,13 +113,14 @@ module ocn_mesh
          angleEdge        ! angle the edge normal makes with local east
 
       ! Multiplicative masks and vectors for various conditions
-      !real (kind=RKIND), dimension(:,:), allocatable :: &
-      integer, dimension(:,:), pointer :: &
+      real (kind=RKIND), dimension(:,:), pointer :: &
+         edgeMask,       &! mask to denote active edges    with depth
          cellMask,       &! mask to denote active cells    with depth
          vertexMask,     &! mask to denote active vertices with depth
          boundaryEdge,   &! mask for boundary edges    at each level
          boundaryCell,   &! mask for boundary cells    at each level
          boundaryVertex, &! mask for boundary vertices at each level
+         edgeSignOnCell, &! sign of edge contributions to a cell
          edgeSignOnVertex,&! sign of edge contributions to a vertex
          highOrderAdvectionMask ! mask for high order advection contributions
 
@@ -410,70 +409,70 @@ contains
          ! so retrieve integer version and set real version in struct.
          ! Once these are converted in Registry, we can eliminate conversion.
          call mpas_pool_get_array(meshPool, 'edgeMask',        &
-                                             ocnMesh%edgeMask)
+                                             edgeMaskTmp)
          call mpas_pool_get_array(meshPool, 'vertexMask',        &
-                                             ocnMesh%vertexMask)
+                                             vertexMaskTmp)
          call mpas_pool_get_array(meshPool, 'cellMask',        &
-                                             ocnMesh%cellMask)
+                                             cellMaskTmp)
          call mpas_pool_get_array(meshPool, 'highOrderAdvectionMask',        &
-                                             ocnMesh%highOrderAdvectionMask)
+                                             highOrderAdvectionMaskTmp)
          call mpas_pool_get_array(meshPool, 'edgeSignOnCell',  &
-                                             ocnMesh%edgeSignOnCell)
+                                             edgeSignOnCellTmp)
          call mpas_pool_get_array(meshPool, 'edgeSignOnVertex',  &
-                                             ocnMesh%edgeSignOnVertex)
+                                             edgeSignOnVertexTmp)
          call mpas_pool_get_array(meshPool, 'boundaryEdge',  &
-                                             ocnMesh%boundaryEdge)
+                                             boundaryEdgeTmp)
          call mpas_pool_get_array(meshPool, 'boundaryVertex',  &
-                                             ocnMesh%boundaryVertex)
+                                             boundaryVertexTmp)
          call mpas_pool_get_array(meshPool, 'boundaryCell',  &
-                                             ocnMesh%boundaryCell)
+                                             boundaryCellTmp)
 
-!         allocate( &
-!            ocnMesh%edgeMask        (ocnMesh%nVertLevels, ocnMesh%nEdges),    &
-!            ocnMesh%cellMask        (ocnMesh%nVertLevels, ocnMesh%nCells),    &
-!            ocnMesh%vertexMask      (ocnMesh%nVertLevels, ocnMesh%nVertices), &
-!            ocnMesh%boundaryEdge    (ocnMesh%nVertLevels, ocnMesh%nEdges),    &
-!            ocnMesh%boundaryCell    (ocnMesh%nVertLevels, ocnMesh%nCells),    &
-!            ocnMesh%boundaryVertex  (ocnMesh%nVertLevels, ocnMesh%nVertices), &
-!            ocnMesh%edgeSignOnCell  (ocnMesh%maxEdges,    ocnMesh%nCells),    &
-!            ocnMesh%edgeSignOnVertex(ocnMesh%maxEdges,    ocnMesh%nVertices), &
-!            ocnMesh%highOrderAdvectionMask(ocnMesh%nVertLevels, ocnMesh%nEdges))
-!
-!         do n=1,ocnMesh%nCells
-!         do k=1,ocnMesh%nVertLevels
-!            ocnMesh%cellMask(k,n)       = real(cellMaskTmp(k,n),       RKIND)
-!            ocnMesh%boundaryCell(k,n)   = real(boundaryCellTmp(k,n),   RKIND)
-!         end do
-!         end do
-!
-!         do n=1,ocnMesh%nCells
-!         do k=1,ocnMesh%maxEdges
-!            ocnMesh%edgeSignOnCell(k,n) = real(edgeSignOnCellTmp(k,n), RKIND)
-!         end do
-!         end do
-!
-!         do n=1,ocnMesh%nEdges
-!         do k=1,ocnMesh%nVertLevels
-!            ocnMesh%edgeMask(k,n)     = real(edgeMaskTmp(k,n),     RKIND)
-!            ocnMesh%boundaryEdge(k,n) = real(boundaryEdgeTmp(k,n), RKIND)
-!            ocnMesh%highOrderAdvectionMask(k,n) = & 
-!                              real(highOrderAdvectionMaskTmp(k,n), RKIND)
-!         end do
-!         end do
-!
-!         do n=1,ocnMesh%nVertices
-!         do k=1,ocnMesh%nVertLevels
-!            ocnMesh%vertexMask(k,n)       = real(vertexMaskTmp(k,n),     RKIND)
-!            ocnMesh%boundaryVertex(k,n)   = real(boundaryVertexTmp(k,n), RKIND)
-!         end do
-!         end do
-!
-!         do n=1,ocnMesh%nVertices
-!         do k=1,ocnMesh%maxEdges
-!            ocnMesh%edgeSignOnVertex(k,n) = &
-!                                          real(edgeSignOnVertexTmp(k,n), RKIND)
-!         end do
-!         end do
+         allocate( &
+            ocnMesh%edgeMask        (ocnMesh%nVertLevels, ocnMesh%nEdges),    &
+            ocnMesh%cellMask        (ocnMesh%nVertLevels, ocnMesh%nCells),    &
+            ocnMesh%vertexMask      (ocnMesh%nVertLevels, ocnMesh%nVertices), &
+            ocnMesh%boundaryEdge    (ocnMesh%nVertLevels, ocnMesh%nEdges),    &
+            ocnMesh%boundaryCell    (ocnMesh%nVertLevels, ocnMesh%nCells),    &
+            ocnMesh%boundaryVertex  (ocnMesh%nVertLevels, ocnMesh%nVertices), &
+            ocnMesh%edgeSignOnCell  (ocnMesh%maxEdges,    ocnMesh%nCells),    &
+            ocnMesh%edgeSignOnVertex(ocnMesh%maxEdges,    ocnMesh%nVertices), &
+            ocnMesh%highOrderAdvectionMask(ocnMesh%nVertLevels, ocnMesh%nEdges))
+
+         do n=1,ocnMesh%nCells
+         do k=1,ocnMesh%nVertLevels
+            ocnMesh%cellMask(k,n)       = real(cellMaskTmp(k,n),       RKIND)
+            ocnMesh%boundaryCell(k,n)   = real(boundaryCellTmp(k,n),   RKIND)
+         end do
+         end do
+
+         do n=1,ocnMesh%nCells
+         do k=1,ocnMesh%maxEdges
+            ocnMesh%edgeSignOnCell(k,n) = real(edgeSignOnCellTmp(k,n), RKIND)
+         end do
+         end do
+
+         do n=1,ocnMesh%nEdges
+         do k=1,ocnMesh%nVertLevels
+            ocnMesh%edgeMask(k,n)     = real(edgeMaskTmp(k,n),     RKIND)
+            ocnMesh%boundaryEdge(k,n) = real(boundaryEdgeTmp(k,n), RKIND)
+            ocnMesh%highOrderAdvectionMask(k,n) = & 
+                              real(highOrderAdvectionMaskTmp(k,n), RKIND)
+         end do
+         end do
+
+         do n=1,ocnMesh%nVertices
+         do k=1,ocnMesh%nVertLevels
+            ocnMesh%vertexMask(k,n)       = real(vertexMaskTmp(k,n),     RKIND)
+            ocnMesh%boundaryVertex(k,n)   = real(boundaryVertexTmp(k,n), RKIND)
+         end do
+         end do
+
+         do n=1,ocnMesh%nVertices
+         do k=1,ocnMesh%maxEdges
+            ocnMesh%edgeSignOnVertex(k,n) = &
+                                          real(edgeSignOnVertexTmp(k,n), RKIND)
+         end do
+         end do
 
          ! Copy structure and components to accelerator
          ! Must manually do a deep copy with structure itself copied first.
@@ -778,15 +777,15 @@ contains
               ocnMesh%cellTangentPlane,         &
               ocnMesh%coeffs_reconstruct)
       
-!      deallocate(ocnMesh%edgeMask,         &
-!                 ocnMesh%cellMask,         &
-!                 ocnMesh%vertexMask,       &
-!                 ocnMesh%boundaryEdge,     &
-!                 ocnMesh%boundaryCell,     &
-!                 ocnMesh%boundaryVertex,   &
-!                 ocnMesh%edgeSignOnCell,   &
-!                 ocnMesh%edgeSignOnVertex, &
-!                 ocnMesh%highOrderAdvectionMask)
+      deallocate(ocnMesh%edgeMask,         &
+                 ocnMesh%cellMask,         &
+                 ocnMesh%vertexMask,       &
+                 ocnMesh%boundaryEdge,     &
+                 ocnMesh%boundaryCell,     &
+                 ocnMesh%boundaryVertex,   &
+                 ocnMesh%edgeSignOnCell,   &
+                 ocnMesh%edgeSignOnVertex, &
+                 ocnMesh%highOrderAdvectionMask)
 
       !$omp end master
 
@@ -810,7 +809,26 @@ contains
 !
 !-------------------------------------------------------------------------------
 
-   subroutine ocn_meshUpdateFields
+   subroutine ocn_meshUpdateFields(domain)
+
+      ! Input arguments
+
+      type(domain_type) :: &
+         domain                    !< [in] MPAS type to describe domain
+
+      !{{{
+      ! Local variables
+
+      type(block_type), pointer :: &
+         block                    ! variables in current subblock
+
+      type (mpas_pool_type), pointer :: &
+         meshPool                 ! mesh variables in MPAS pool structure
+
+      ! temporary pointers for converting masks
+      integer k,n          ! loop indices
+      integer, dimension(:,:), pointer :: &
+         edgeSignOnCellTmp
 
       !***
       !*** end of preamble, begin code
@@ -819,6 +837,21 @@ contains
 #ifdef MPAS_OPENACC
       !TODO: check for other fields that may need updating
       !$omp master
+
+      block => domain % blocklist
+      if ( associated(block) ) then
+         ! retrieve the mpas mesh pool
+         call mpas_pool_get_subpool(block % structs, 'mesh', meshPool)
+
+         call mpas_pool_get_array(meshPool, 'edgeSignOnCell',  &
+                                             edgeSignOnCellTmp)
+
+         do n=1,ocnMesh%nCells
+         do k=1,ocnMesh%maxEdges
+            ocnMesh%edgeSignOnCell(k,n) = real(edgeSignOnCellTmp(k,n), RKIND)
+         end do
+         end do
+      endif
 
       ! update fields on the device
       !$acc update device(ocnMesh%edgeSignOnCell)           

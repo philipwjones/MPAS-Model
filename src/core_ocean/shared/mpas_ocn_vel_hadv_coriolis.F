@@ -25,6 +25,7 @@ module ocn_vel_hadv_coriolis
    use mpas_derived_types
    use mpas_pool_routines
    use ocn_constants
+   use ocn_mesh, only: ocnMesh
 
    implicit none
    private
@@ -116,8 +117,8 @@ contains
       !-----------------------------------------------------------------
 
       integer, dimension(:), pointer :: maxLevelEdgeTop, nEdgesOnEdge
-      integer, dimension(:,:), pointer :: cellsOnEdge, edgesOnEdge, edgeMask
-      real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge
+      integer, dimension(:,:), pointer :: cellsOnEdge, edgesOnEdge
+      real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge, edgeMask
       real (kind=RKIND), dimension(:), pointer :: dcEdge
 
       integer :: j, k
@@ -140,14 +141,14 @@ contains
       call mpas_pool_get_array(meshPool, 'edgesOnEdge', edgesOnEdge)
       call mpas_pool_get_array(meshPool, 'weightsOnEdge', weightsOnEdge)
       call mpas_pool_get_array(meshPool, 'dcEdge', dcEdge)
-      call mpas_pool_get_array(meshPool, 'edgeMask', edgeMask)
 
       call mpas_pool_get_dimension(meshPool, 'nEdgesArray', nEdgesArray)
       call mpas_pool_get_dimension(meshPool, 'nVertLevels', nVertLevels)
 
       nEdges = nEdgesArray( 1 )
       mxlvl = maxval(maxLevelEdgeTop)
-
+      edgeMask => ocnMesh%edgeMask
+      
 #ifdef MPAS_OPENACC
 	  !$omp master
 	  !$acc parallel loop gang vector collapse(2) &

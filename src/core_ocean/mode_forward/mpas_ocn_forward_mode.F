@@ -107,10 +107,6 @@ module ocn_forward_mode
 
    function ocn_forward_mode_init(domain, startTimeStamp) result(ierr)!{{{
 
-#ifdef MPAS_OPENACC
-      use ocn_gpu_support, only: ocn_gpu_copy_mesh_to_device,ocn_gpu_post_core_init
-#endif
-
       type (domain_type), intent(inout) :: domain
       character(len=*), intent(out) :: startTimeStamp
       integer :: ierr
@@ -363,7 +359,7 @@ module ocn_forward_mode
       end do
 
       ! Update any mesh fields that may have been modified during init
-      call ocn_meshUpdateFields
+      call ocn_meshUpdateFields(domain)
 
       if (config_conduct_tests) then
          call mpas_timer_start("test suite")

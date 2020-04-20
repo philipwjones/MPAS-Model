@@ -35,7 +35,8 @@ module ocn_diagnostics
    use ocn_equation_of_state
    use ocn_thick_ale
    use ocn_diagnostics_routines
-
+   use ocn_mesh, only: ocnMesh
+   
    implicit none
    private
    save
@@ -113,7 +114,7 @@ contains
         maxLevelVertexBot
       integer, dimension(:,:), pointer :: cellsOnEdge, cellsOnVertex, &
         verticesOnEdge, edgesOnEdge, edgesOnVertex,boundaryCell, kiteIndexOnCell, &
-        verticesOnCell, edgeSignOnVertex, edgeSignOnCell, edgesOnCell, edgeMask
+        verticesOnCell, edgesOnCell
 
       real (kind=RKIND) :: d2fdx2_cell1, d2fdx2_cell2, coef_3rd_order, r_tmp, &
         k_tmp, tmp, &
@@ -126,6 +127,8 @@ contains
       real (kind=RKIND), dimension(:), pointer :: &
         bottomDepth, fVertex, dvEdge, dcEdge, areaCell, areaTriangle, ssh,  seaIcePressure, atmosphericPressure, frazilSurfacePressure, &
         pressureAdjustedSSH, gradSSH, landIcePressure, landIceDraft
+      real (kind=RKIND), dimension(:,:), pointer :: &
+        edgeSignOnCell, cellMask, edgeMask
       real (kind=RKIND), dimension(:,:), pointer :: &
         weightsOnEdge, kiteAreasOnVertex, layerThicknessEdge, layerThickness, normalVelocity, normalTransportVelocity, &
         normalGMBolusVelocity, tangentialVelocity, pressure, circulation, kineticEnergyCell, montgomeryPotential, &
@@ -170,6 +173,10 @@ contains
       
       call mpas_timer_start('diagnostic solve')
 
+      edgeSignOnCell => ocnMesh%edgeSignOnCell
+      cellMask       => ocnMesh%cellMask
+      edgeMask       => ocnMesh%edgeMask
+      
       if (present(timeLevelIn)) then
          timeLevel = timeLevelIn
       else
@@ -247,9 +254,6 @@ contains
       call mpas_pool_get_array(meshPool, 'kiteIndexOnCell', kiteIndexOnCell)
       call mpas_pool_get_array(meshPool, 'verticesOnCell', verticesOnCell)
       call mpas_pool_get_array(meshPool, 'boundaryCell', boundaryCell)
-      call mpas_pool_get_array(meshPool, 'edgeSignOnVertex', edgeSignOnVertex)
-      call mpas_pool_get_array(meshPool, 'edgeSignOnCell', edgeSignOnCell)
-      call mpas_pool_get_array(meshPool, 'edgeMask', edgeMask)
 
       call mpas_pool_get_array(forcingPool, 'seaIcePressure', seaIcePressure)
       call mpas_pool_get_array(forcingPool, 'atmosphericPressure', atmosphericPressure)
@@ -507,7 +511,7 @@ contains
 !         invAreaCell1 = invAreaCell(iCell)
 !         do i = 1, nEdgesOnCell(iCell)
 !            iEdge = edgesOnCell(i, iCell)
-!            edgeSignOnCell_temp = edgeSignOnCell(i, iCell)
+!            edgeSignOnCell_temp = ocnMesh%edgeSignOnCell(i, iCell)
 !            dvEdge_temp = dvEdge(iEdge)
 !            do k = 1, nVertLevels
 !              if ( k <= maxLevelCell(iCell) ) then
@@ -1460,7 +1464,7 @@ contains
       integer, dimension(:), pointer :: nCellsArray
       integer, dimension(:), pointer :: nEdgesOnCell, nEdgesOnEdge, &
         maxLevelCell, maxLevelEdgeBot
-      integer, dimension(:,:), pointer :: edgesOnCell, edgeSignOnCell
+      integer, dimension(:,:), pointer :: edgesOnCell
 
       real (kind=RKIND) :: flux, invAreaCell, div_hu_btr
       real (kind=RKIND), dimension(:), pointer :: dvEdge, areaCell
@@ -1471,6 +1475,8 @@ contains
          ALE_Thickness, & !> ALE thickness at new time
          div_hu           !> divergence of (thickness*velocity)
       type (field2DReal), pointer :: ALE_ThicknessField, div_huField
+      real (kind=RKIND), dimension(:,:), pointer :: &
+        edgeSignOnCell
 
       character (len=StrKIND), pointer :: config_vert_coord_movement
 
@@ -1481,7 +1487,6 @@ contains
       call mpas_pool_get_array(meshPool, 'nEdgesOnCell', nEdgesOnCell)
       call mpas_pool_get_array(meshPool, 'areaCell', areaCell)
       call mpas_pool_get_array(meshPool, 'edgesOnCell', edgesOnCell)
-      call mpas_pool_get_array(meshPool, 'edgeSignOnCell', edgeSignOnCell)
       call mpas_pool_get_array(meshPool, 'maxLevelCell', maxLevelCell)
       call mpas_pool_get_array(meshPool, 'maxLevelEdgeBot', maxLevelEdgeBot)
       call mpas_pool_get_array(meshPool, 'dvEdge', dvEdge)
@@ -1507,7 +1512,8 @@ contains
       div_hu => div_huField % array
       projectedSSH => projectedSSHField % array
       ALE_Thickness => ALE_ThicknessField % array
-
+      edgeSignOnCell => ocnMesh%edgeSignOnCell
+      
 #ifdef MPAS_OPENACC
 	  !$omp master
 	  !$acc enter data copyin(div_hu,ALE_thickness,projectedSSH,maxLevelEdgeBot) async(1)
@@ -2128,7 +2134,7 @@ contains
       integer :: iCell, iEdge, cell1, cell2, iLevel, i
       integer, pointer :: nCells, nEdges
 
-      integer, dimension(:,:), pointer :: cellsOnCell, cellsOnEdge, cellMask
+      integer, dimension(:,:), pointer :: cellsOnCell, cellsOnEdge
 
       integer, dimension(:), pointer :: maxLevelCell, nEdgesOnCell
 
@@ -2156,7 +2162,7 @@ contains
 
       integer, dimension(:), pointer :: landIceMask
 
-      real (kind=RKIND), dimension(:,:), pointer :: kineticEnergyCell, layerThickness, normalVelocity, &
+      real (kind=RKIND), dimension(:,:), pointer :: kineticEnergyCell, layerThickness, normalVelocity, cellMask, &
                                                     landIceBoundaryLayerTracers, landIceTracerTransferVelocities
       real (kind=RKIND), dimension(:,:,:), pointer :: activeTracers
       type (field1DReal), pointer :: boundaryLayerTemperatureField, boundaryLayerSalinityField
@@ -2179,6 +2185,8 @@ contains
 
       call mpas_timer_start("land_ice_diagnostic_fields", .false.)
 
+      cellMask => ocnMesh%cellMask
+      
       jenkinsOn = .false.
       hollandJenkinsOn = .false.
       call mpas_pool_get_config(ocnConfigs, 'config_land_ice_flux_formulation', config_land_ice_flux_formulation)
@@ -2211,7 +2219,6 @@ contains
       call mpas_pool_get_array(meshPool, 'cellsOnEdge', cellsOnEdge)
       call mpas_pool_get_array(meshPool, 'maxLevelCell', maxLevelCell)
       call mpas_pool_get_array(meshPool, 'nEdgesOnCell', nEdgesOnCell)
-      call mpas_pool_get_array(meshPool, 'cellMask', cellMask)
 
       call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, timeLevel)
       call mpas_pool_get_array(statePool, 'layerThickness', layerThickness, timeLevel)
