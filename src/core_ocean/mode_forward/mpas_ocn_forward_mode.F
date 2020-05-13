@@ -327,6 +327,8 @@ module ocn_forward_mode
       ! fill the ocean mesh structure
       call ocn_meshCreate(domain)
 
+      call ocn_time_integration_split_init_2(domain)
+      
       timeStep = mpas_get_clock_timestep(domain % clock, ierr=err_tmp)
       call mpas_get_timeInterval(timeStep, dt=dt)
 

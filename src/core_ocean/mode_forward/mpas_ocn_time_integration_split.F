@@ -62,11 +62,14 @@ module ocn_time_integration_split
    !
    !--------------------------------------------------------------------
 
-   public :: ocn_time_integrator_split, ocn_time_integration_split_init
+   public :: ocn_time_integrator_split, ocn_time_integration_split_init, &
+             ocn_time_integration_split_init_2
 
    character (len=*), parameter :: subcycleGroupName = 'subcycleFields'
    character (len=*), parameter :: finalBtrGroupName = 'finalBtrFields'
    integer :: nBtrSubcycles
+
+   real (kind=RKIND), dimension(:), pointer, save :: dcEdgeInv
 
    contains
 
@@ -153,7 +156,8 @@ module ocn_time_integration_split
       real (kind=RKIND), pointer :: config_mom_del4, config_btr_gam1_velWt1Ptr, config_btr_gam2_SSHWt1Ptr
       real (kind=RKIND)          :: config_btr_gam2_SSHWt1,config_btr_gam1_velWt1, inv_thick, coeff
       real (kind=RKIND), pointer :: config_btr_gam3_velWt2
-      real (kind=RKIND), pointer :: config_self_attraction_and_loading_beta
+      real (kind=RKIND), pointer :: config_self_attraction_and_loading_betaPtr
+      real (kind=RKIND)          :: config_self_attraction_and_loading_beta
 
       ! Dimensions
       integer :: nCells, nEdges
@@ -169,10 +173,10 @@ module ocn_time_integration_split
       ! Mesh array pointers
       integer, dimension(:), pointer :: maxLevelCell, maxLevelEdgeTop, nEdgesOnEdge, nEdgesOnCell
       integer, dimension(:,:), pointer :: cellsOnEdge, edgesOnEdge
-      real (kind=RKIND), dimension(:,:), pointer :: edgeMask
+      real (kind=RKIND), dimension(:,:), pointer :: edgeMask, edgeSignOnCell
       integer, dimension(:,:), pointer :: edgesOnCell
 
-      real (kind=RKIND), dimension(:), pointer :: dcEdge, fEdge, bottomDepth, refBottomDepthTopOfCell
+      real (kind=RKIND), dimension(:), pointer :: fEdge, bottomDepth, refBottomDepthTopOfCell
       real (kind=RKIND), dimension(:), pointer :: dvEdge, areaCell
       real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge
 
@@ -261,8 +265,9 @@ module ocn_time_integration_split
       call mpas_pool_get_config(domain % configs, 'config_disable_thick_all_tend', config_disable_thick_all_tend)
       call mpas_pool_get_config(domain % configs, 'config_disable_tr_all_tend', config_disable_tr_all_tend)
       call mpas_pool_get_config(domain % configs, 'config_use_tidal_potential_forcing', config_use_tidal_potential_forcing)
-      call mpas_pool_get_config(domain % configs, 'config_self_attraction_and_loading_beta',config_self_attraction_and_loading_beta)
-
+      call mpas_pool_get_config(domain % configs, 'config_self_attraction_and_loading_beta',config_self_attraction_and_loading_betaPtr)
+      config_self_attraction_and_loading_beta = config_self_attraction_and_loading_betaPtr
+      
       call mpas_pool_get_config(domain % configs, 'config_prescribe_velocity', config_prescribe_velocity)
       call mpas_pool_get_config(domain % configs, 'config_prescribe_thickness', config_prescribe_thickness)
 
@@ -326,6 +331,7 @@ module ocn_time_integration_split
 
          nCells = nCellsPtr
          nEdges = nEdgesPtr
+         
 #ifdef MPAS_OPENACC
 	     !$omp master	  
 	     !$acc enter data copyin(normalBaroclinicVelocityCur,normalVelocityCur,normalVelocityNew, &
@@ -344,7 +350,9 @@ module ocn_time_integration_split
 #endif	     
 
          ! Initialize * variables that are used to compute baroclinic tendencies below.
-
+         edgeMask       => ocnMesh%edgeMask
+         edgeSignOnCell => ocnMesh%edgeSignOnCell
+         
 #ifdef MPAS_OPENACC
 	     !$omp master	  
 	     !$acc parallel loop gang vector collapse(2) &
@@ -731,7 +739,6 @@ module ocn_time_integration_split
 
                call mpas_pool_get_array(meshPool, 'cellsOnEdge', cellsOnEdge)
                call mpas_pool_get_array(meshPool, 'maxLevelEdgeTop', maxLevelEdgeTop)
-               call mpas_pool_get_array(meshPool, 'dcEdge', dcEdge)
 
                call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocityNew, 2)
                call mpas_pool_get_array(statePool, 'normalBaroclinicVelocity', normalBaroclinicVelocityCur, 1)
@@ -760,7 +767,7 @@ module ocn_time_integration_split
 	           !$omp master
 			   !$acc parallel loop  &
 			   !$acc          present(cellsOnEdge,maxLevelEdgeTop, normalVelocityTend, &
-			   !$acc                  dcEdge,normalVelocityNew, &
+			   !$acc                  dcEdgeInv,normalVelocityNew, &
 			   !$acc                  sshNew,normalBaroclinicVelocityCur,normalBaroclinicVelocityNew, &
 			   !$acc                  layerThicknessEdge,barotropicForcing) &
 			   !$acc          private(uTemp,cell1,cell2,normalThicknessFluxSum, thicknessSum) async(1)
@@ -781,7 +788,7 @@ module ocn_time_integration_split
                          + dt * (normalVelocityTend(k,iEdge) &
                          + normalVelocityNew(k,iEdge) &  ! this is f*normalBaroclinicVelocity^{perp}
                          + split * gravity * (  sshNew(cell2) - sshNew(cell1) ) &
-                          / dcEdge(iEdge) )
+                          * dcEdgeInv(iEdge) )
                   enddo
 
                   ! thicknessSum is initialized outside the loop because on land boundaries
@@ -887,7 +894,7 @@ module ocn_time_integration_split
                      ! normalTransportVelocity = normalBaroclinicVelocity + normalGMBolusVelocity
                      ! This is u used in advective terms for layerThickness and tracers
                      ! in tendency calls in stage 3.
-                     normalTransportVelocity(k,iEdge) = ocnMesh%edgeMask(k,iEdge) &
+                     normalTransportVelocity(k,iEdge) = edgeMask(k,iEdge) &
                            *( normalBaroclinicVelocityNew(k,iEdge) + normalGMBolusVelocity(k,iEdge) )
 
                   enddo
@@ -1026,7 +1033,6 @@ module ocn_time_integration_split
                      call mpas_pool_get_array(meshPool, 'edgesOnEdge', edgesOnEdge)
                      call mpas_pool_get_array(meshPool, 'weightsOnEdge', weightsOnEdge)
                      call mpas_pool_get_array(meshPool, 'fEdge', fEdge)
-                     call mpas_pool_get_array(meshPool, 'dcEdge', dcEdge)
 
                      call mpas_pool_get_array(statePool, 'normalBarotropicVelocitySubcycle', normalBarotropicVelocitySubcycleCur, &
                                               uPerpTime)
@@ -1060,14 +1066,13 @@ module ocn_time_integration_split
 					 coeff = dt / nBtrSubcycles
 #ifdef MPAS_OPENACC
                      ! Getting diffs w/ GPU execution, but not CPU
-                     edgeMask => ocnMesh%edgeMask
                      
 					 !$omp master
 					 !$acc update device(normalBarotropicVelocitySubcycleCur,normalBarotropicVelocitySubcycleNew, &
 					 !$acc               sshSubcycleCur,barotropicForcing) async(1)
 	  
 					 !$acc parallel loop &
-				     !$acc          present(cellsOnEdge,dcEdge,nEdgesOnEdge, &
+				     !$acc          present(cellsOnEdge,dcEdgeInv,nEdgesOnEdge, &
 				     !$acc                  edgesOnEdge,weightsOnEdge,fEdge, barotropicForcing, &
 				     !$acc                  normalBarotropicVelocitySubcycleCur,normalBarotropicVelocitySubcycleNew,sshSubcycleCur, &
 				     !$acc                  edgeMask) &
@@ -1094,7 +1099,7 @@ module ocn_time_integration_split
                             * (normalBarotropicVelocitySubcycleCur(iEdge) &
                             + coeff * (CoriolisTerm - gravity &
                             * (sshSubcycleCur(cell2) - sshSubcycleCur(cell1) ) &
-                            / dcEdge(iEdge) + barotropicForcing(iEdge)))
+                            * dcEdgeInv(iEdge) + barotropicForcing(iEdge)))
 
                      end do
 #ifdef MPAS_OPENACC
@@ -1158,12 +1163,13 @@ module ocn_time_integration_split
                 ! config_btr_gam1_velWt1=0.5     flux = 1/2*(normalBarotropicVelocityNew+normalBarotropicVelocityOld)*H
                 ! config_btr_gam1_velWt1=  0     flux = normalBarotropicVelocityOld*H
 
+			    coeff = dt / nBtrSubcycles
 #ifdef MPAS_OPENACC
 			    !$omp master
 				!$acc update device(sshTend,sshSubcycleNew,barotropicThicknessFlux) async(1)
 			    
 			    !$acc parallel loop &
-			    !$acc          present(cellsOnEdge,edgesOnCell,nEdgesOnEdge,ocnMesh%edgeSignOnCell,dvEdge, &
+			    !$acc          present(cellsOnEdge,edgesOnCell,nEdgesOnEdge,edgeSignOnCell,dvEdge, &
 			    !$acc                  nEdgesOnCell, areaCell,sshTend,sshSubcycleCur,sshSubcycleNew, &
 			    !$acc                  normalBarotropicVelocitySubcycleCur,normalBarotropicVelocitySubcycleNew, &
 			    !$acc                  bottomDepth) &
@@ -1196,13 +1202,13 @@ module ocn_time_integration_split
                            + config_btr_gam1_velWt1 * normalBarotropicVelocitySubcycleNew(iEdge)) &
                            * thicknessSum
 
-                    sshTend(iCell) = sshTend(iCell) + ocnMesh%edgeSignOnCell(i, iCell) * flux * dvEdge(iEdge)
+                    sshTend(iCell) = sshTend(iCell) + edgeSignOnCell(i, iCell) * flux * dvEdge(iEdge)
 
                   end do
 
                   ! SSHnew = SSHold + dt/J*(-div(Flux))
                   sshSubcycleNew(iCell) = sshSubcycleCur(iCell) &
-                                          + dt / nBtrSubcycles * sshTend(iCell) / areaCell(iCell)
+                                          + coeff * sshTend(iCell) / areaCell(iCell)
                 end do
 #ifdef MPAS_OPENACC
 	            !$acc update host(sshSubcycleNew,sshTend) async(1)
@@ -1312,7 +1318,6 @@ module ocn_time_integration_split
                  call mpas_pool_get_array(meshPool, 'edgesOnEdge', edgesOnEdge)
                  call mpas_pool_get_array(meshPool, 'weightsOnEdge', weightsOnEdge)
                  call mpas_pool_get_array(meshPool, 'fEdge', fEdge)
-                 call mpas_pool_get_array(meshPool, 'dcEdge', dcEdge)
                  
                  call mpas_pool_get_array(diagnosticsPool, 'barotropicForcing', barotropicForcing)
                  
@@ -1336,18 +1341,27 @@ module ocn_time_integration_split
                  sshSubcycleNewPtr => sshSubcycleNew
                  
 				 edgeHaloComputeCounter = saved_edgeHaloComputeCounter
+				 coeff = 1.0 - config_self_attraction_and_loading_beta
                  do BtrCorIter = 1, config_n_btr_cor_iter
                     uPerpTime = newBtrSubcycleTime
 
                     if (config_use_tidal_potential_forcing) then
                        sshSubcycleCur => sshSubcycleCurPtr
                        sshSubcycleNew => sshSubcycleNewPtr
+#ifdef MPAS_OPENACC
+                       !$omp master
+                       !$acc parallel loop present(sshSubcycleCurWithTides, sshSubcycleCur, tidalPotentialEta, &
+                       !$acc                       sshSubcycleNew) async(1)
+#endif                       
                        do iCell = 1, nCells
                           sshSubcycleCurWithTides(iCell) = sshSubcycleCur(iCell) - tidalPotentialEta(iCell) &
                                                       - config_self_attraction_and_loading_beta * sshSubcycleCur(iCell)
                           sshSubcycleNewWithTides(iCell) = sshSubcycleNew(iCell) - tidalPotentialEta(iCell) &
                                                       - config_self_attraction_and_loading_beta * sshSubcycleNew(iCell)
                        end do
+#ifdef MPAS_OPENACC
+					   !$omp end master
+#endif					   
                        sshSubcycleCur => sshSubcycleCurWithTides
                        sshSubcycleNew => sshSubcycleNewWithTides
                     end if
@@ -1368,11 +1382,10 @@ module ocn_time_integration_split
                     !$omp end do
 #endif
                     !nEdges = nEdgesArray( edgeHaloComputeCounter )
-                    edgeMask => ocnMesh%edgeMask
 #ifdef MPAS_OPENACC
                     !$omp master
                     !$acc parallel loop present(btrvel_temp, normalBarotropicVelocitySubcycleNew, edgeMask, cellsOnEdge, &
-                    !$acc                       nEdgesOnEdge, edgesOnEdge, weightsOnEdge, fEdge, dcEdge, barotropicForcing, &
+                    !$acc                       nEdgesOnEdge, edgesOnEdge, weightsOnEdge, fEdge, dcEdgeInv, barotropicForcing, &
                     !$acc                       sshSubcycleCur, sshSubcycleNew, normalBarotropicVelocitySubcycleCur) &
                     !$acc               private(temp_mask, cell1, cell2, eoe, CoriolisTerm, i, sshCell1, sshCell2) &
                     !$acc async(1)
@@ -1410,7 +1423,7 @@ module ocn_time_integration_split
                       normalBarotropicVelocitySubcycleNew(iEdge) = temp_mask &
                             * (normalBarotropicVelocitySubcycleCur(iEdge) &
                             + dt / nBtrSubcycles &
-                            * (CoriolisTerm - gravity * (sshCell2 - sshCell1) / dcEdge(iEdge) &
+                            * (CoriolisTerm - gravity * (sshCell2 - sshCell1) * dcEdgeInv(iEdge) &
                             + barotropicForcing(iEdge)))
 
                     end do
@@ -1531,7 +1544,7 @@ module ocn_time_integration_split
                               + config_btr_gam3_velWt2 * normalBarotropicVelocitySubcycleNew(iEdge)) &
                               * thicknessSum
 
-                       sshTend(iCell) = sshTend(iCell) + ocnMesh%edgeSignOnCell(i, iCell) * flux &
+                       sshTend(iCell) = sshTend(iCell) + edgeSignOnCell(i, iCell) * flux &
                               * dvEdge(iEdge)
 
                      end do
@@ -1754,7 +1767,6 @@ module ocn_time_integration_split
                   useVelocityCorrection = 0
                endif
 
-				edgeMask => ocnMesh%edgeMask
 #ifdef MPAS_OPENACC
 	           !$omp master
 	           !$acc update device(barotropicThicknessFlux,normalGMBolusVelocity,normalTransportVelocity, &
@@ -2118,7 +2130,6 @@ module ocn_time_integration_split
 #endif
                end if
 
-			   edgeMask => ocnMesh%edgeMask
 #ifdef MPAS_OPENACC
                !$omp master
                !$acc parallel loop gang vector collapse(2) &
@@ -2540,8 +2551,11 @@ module ocn_time_integration_split
       !$omp end master	  		 		 
 #endif
          
-!#ifdef MPAS_OPENACC
       call ocn_gpu_exit_integration(domain)
+!#ifdef MPAS_OPENACC
+!      !$omp master
+!      !$acc exit data delete(dcEdgeInv)
+!      !$omp end master
 !#endif      
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       ! END large iteration loop
@@ -2900,6 +2914,31 @@ module ocn_time_integration_split
       end if
 
    end subroutine ocn_time_integration_split_init!}}}
+
+   subroutine ocn_time_integration_split_init_2(domain)!{{{
+   ! Initialize splitting variables
+
+      type (domain_type), intent(inout) :: domain
+
+      integer :: iEdge
+      type (block_type), pointer :: block
+
+      integer, pointer :: nEdges
+
+      block => domain % blocklist
+      call mpas_pool_get_dimension(block % dimensions, 'nEdges', nEdges)
+
+	 !$omp master
+	 allocate(dcEdgeInv(nEdges))
+	 do iEdge = 1,nEdges
+		dcEdgeInv(iEdge) = 1.0 / ocnMesh%dcEdge(iEdge)
+	 end do
+	 
+	 !$acc enter data copyin(dcEdgeInv)
+	 !$omp end master         
+                  
+
+   end subroutine ocn_time_integration_split_init_2!}}}
 
 end module ocn_time_integration_split
 
