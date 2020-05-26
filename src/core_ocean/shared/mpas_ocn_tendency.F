@@ -309,6 +309,14 @@ contains
       end do
       !$omp end do
 
+#ifdef MPAS_OPENACC
+      !$omp master
+      !$acc enter data copyin(normalizedRelativeVorticityEdge, normalizedPlanetaryVorticityEdge, zMid, &
+      !$acc                   pressure, density, activeTracers, potentialDensity, vertAleTransportTop, &
+      !$acc                   normalVelocity, kineticEnergyCell, tend_normalVelocity, layerThicknessEdge) async(1)
+      !$omp end master
+#endif
+
       !$omp do schedule(runtime)
       do iCell = 1, nCells
          surfaceStressMagnitude(iCell) = 0.0_RKIND
@@ -364,6 +372,7 @@ contains
       !
       ! velocity tendency: pressure gradient
       !
+      
       if (config_pressure_gradient_type.eq.'Jacobian_from_TS') then
          ! only pass EOS derivatives if needed.
          call mpas_pool_get_array(diagnosticsPool, 'inSituThermalExpansionCoeff',inSituThermalExpansionCoeff)
@@ -372,6 +381,12 @@ contains
               indexTemperature, indexSalinity, activeTracers, tend_normalVelocity, err, &
               inSituThermalExpansionCoeff,inSituSalineContractionCoeff)
       else
+#ifdef MPAS_OPENACC
+         !$omp master
+         !$acc wait
+         call mpas_threading_barrier()
+         !$omp end master
+#endif
          call ocn_vel_pressure_grad_tend(meshPool, ssh, pressure, montgomeryPotential, zMid, density, potentialDensity, &
               indexTemperature, indexSalinity, activeTracers, tend_normalVelocity, err, &
               inSituThermalExpansionCoeff,inSituSalineContractionCoeff)
@@ -381,6 +396,16 @@ contains
         ! point zMid back to usual array, to be safe
         call mpas_pool_get_array(diagnosticsPool, 'zMid', zMid)
       end if
+
+#ifdef MPAS_OPENACC
+      !$omp master
+      !$acc wait
+
+      !$acc exit data delete(normalizedRelativeVorticityEdge, normalizedPlanetaryVorticityEdge, zMid, &
+      !$acc                   pressure, density, activeTracers, potentialDensity, vertAleTransportTop, &
+      !$acc                   normalVelocity, kineticEnergyCell, tend_normalVelocity, layerThicknessEdge)
+      !$omp end master
+#endif
 
       !
       ! velocity tendency: del2 dissipation, \nu_2 \nabla^2 u

@@ -4,6 +4,7 @@ OBJS = mpas_subdriver.o \
        mpas.o
 
 all:
+	@echo "all: FCINCLUDES = $(FCINCLUDES)"
 	($(MAKE) clean)
 	($(MAKE) driver)
 

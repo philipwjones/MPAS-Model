@@ -338,8 +338,11 @@ contains
 #ifdef MPAS_OPENACC
       !$omp master
       !$acc enter data copyin(density, p, p2, tracerTemp, tracerSalt)
-      !$acc parallel loop gang vector collapse(2) &
-      !$acc&   present(density, p, p2, tracerTemp, tracerSalt)
+      !!$acc parallel loop gang vector collapse(2) &
+      !$acc parallel loop collapse(2) &
+      !$acc&   present(density, p, p2, tracerTemp, tracerSalt) &
+      !$acc    private(k,sq,tq,sqr,t2,work1,work2,rhosfc,work3,work4,&
+      !$acc            bulkMod)
 #else
       !$omp  do schedule(runtime)
 #endif
@@ -612,10 +615,12 @@ contains
       !$acc enter data copyin(density, p, p2, tracerTemp, tracerSalt, &
       !$acc&                  thermalExpansionCoeff,  &
       !$acc&                  salineContractionCoeff)
-      !$acc parallel loop gang vector collapse(2)     &
+      !$acc parallel loop collapse(2)   &
       !$acc&   present(density, p, p2, tracerTemp, tracerSalt, &
       !$acc&           thermalExpansionCoeff,         &
-      !$acc&           salineContractionCoeff)
+      !$acc&           salineContractionCoeff)  &
+      !$acc    private(k,sq,tq,sqr,t2,work1,work2,rhosfc,work3,work4,&
+      !$acc            bulkMod,denomk,drdt0,dkdt,drds0,dkds,drhods,drhodt)
 #else
       !$omp do schedule(runtime)
 #endif
