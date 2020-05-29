@@ -40,7 +40,7 @@ module ocn_time_integration_split
    use ocn_time_average_coupled
 
    use ocn_effective_density_in_land_ice
-   use ocn_mesh, only: ocnMesh
+   use ocn_mesh, only: dcEdge,edgeMask,edgeSignOnCell,dcEdgeInv
    
 #ifdef MPAS_OPENACC
    use ocn_gpu_forward
@@ -62,14 +62,11 @@ module ocn_time_integration_split
    !
    !--------------------------------------------------------------------
 
-   public :: ocn_time_integrator_split, ocn_time_integration_split_init, &
-             ocn_time_integration_split_init_2
+   public :: ocn_time_integrator_split, ocn_time_integration_split_init
 
    character (len=*), parameter :: subcycleGroupName = 'subcycleFields'
    character (len=*), parameter :: finalBtrGroupName = 'finalBtrFields'
    integer :: nBtrSubcycles
-
-   real (kind=RKIND), dimension(:), pointer, save :: dcEdgeInv
 
    contains
 
@@ -175,7 +172,6 @@ module ocn_time_integration_split
       ! Mesh array pointers
       integer, dimension(:), pointer :: maxLevelCell, maxLevelEdgeTop, nEdgesOnEdge, nEdgesOnCell
       integer, dimension(:,:), pointer :: cellsOnEdge, edgesOnEdge
-      real (kind=RKIND), dimension(:,:), pointer :: edgeMask, edgeSignOnCell
       integer, dimension(:,:), pointer :: edgesOnCell
 
       real (kind=RKIND), dimension(:), pointer :: fEdge, bottomDepth, refBottomDepthTopOfCell
@@ -357,8 +353,6 @@ module ocn_time_integration_split
 #endif	     
 
          ! Initialize * variables that are used to compute baroclinic tendencies below.
-         edgeMask       => ocnMesh%edgeMask
-         edgeSignOnCell => ocnMesh%edgeSignOnCell
          
 #ifdef MPAS_OPENACC
 	     !$omp master	  
@@ -2975,31 +2969,6 @@ module ocn_time_integration_split
       end if
 
    end subroutine ocn_time_integration_split_init!}}}
-
-   subroutine ocn_time_integration_split_init_2(domain)!{{{
-   ! Initialize splitting variables
-
-      type (domain_type), intent(inout) :: domain
-
-      integer :: iEdge
-      type (block_type), pointer :: block
-
-      integer, pointer :: nEdges
-
-      block => domain % blocklist
-      call mpas_pool_get_dimension(block % dimensions, 'nEdges', nEdges)
-
-	 !$omp master
-	 allocate(dcEdgeInv(nEdges))
-	 do iEdge = 1,nEdges
-		dcEdgeInv(iEdge) = 1.0 / ocnMesh%dcEdge(iEdge)
-	 end do
-	 
-	 !$acc enter data copyin(dcEdgeInv)
-	 !$omp end master         
-                  
-
-   end subroutine ocn_time_integration_split_init_2!}}}
 
 end module ocn_time_integration_split
 

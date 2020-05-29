@@ -340,6 +340,7 @@ contains
             end do
          end do
 #ifdef MPAS_OPENACC
+         !$acc update host(kappaGMCell) async(1)
          !$omp end master
 #else      
          !$omp end do
@@ -365,6 +366,7 @@ contains
             end do
          end do
 #ifdef MPAS_OPENACC
+         !$acc update host(kappaRediSfcTaper) async(1)
          !$omp end master
 #else      
          !$omp end do
@@ -517,6 +519,7 @@ contains
          k33(maxLevelCell(iCell) + 1, iCell) = 0.0_RKIND
       end do ! iCell
 #ifdef MPAS_OPENACC
+      !$acc update host(k33,slopeTriadUp,slopeTriadDown) async(1)
       !$omp end master
 #else      
       !$omp end do
@@ -543,6 +546,7 @@ contains
             end do
          end do
 #ifdef MPAS_OPENACC
+         !$acc update host(k33) async(1)
          !$omp end master
 #else      
          !$omp end do
@@ -562,7 +566,7 @@ contains
          !$acc parallel loop &
          !$acc present(areaCell,layerThickness,activeTracers,maxLevelCell,nEdgesOnCell, &
          !$acc         edgesOnCell,cellsOnEdge,dcEdge,dvEdge,inSituThermalExpansionCoeff,&
-         !$acc         inSituSalineContractionCoeff,slopeTriadUp,slopeTriadDown,kappaRediSfcTaper, &
+         !$acc         inSituSalineContractionCoeff,kappaRediSfcTaper, &
          !$acc         k33) &
          !$acc private(cell1, cell2, dcEdgeInv, drhoDT, drhoDS, dTdx, dSdx, drhoDx) &
          !$acc async(1)
@@ -592,6 +596,7 @@ contains
             end do
          end do
 #ifdef MPAS_OPENACC
+         !$acc update host(gradDensityEdge) async(1)
          !$omp end master
 #else      
          !$omp end do
@@ -632,6 +637,7 @@ contains
 
             end do
 #ifdef MPAS_OPENACC
+            !$acc update host(cGMphaseSpeed) async(1)
             !$omp end master
 #else      
             !$omp end do
@@ -649,6 +655,7 @@ contains
                cGMphaseSpeed(iEdge) = cgm_const_gwspeed
             end do
 #ifdef MPAS_OPENACC
+            !$acc update host(cGMphaseSpeed) async(1)
             !$omp end master
 #else      
             !$omp end do

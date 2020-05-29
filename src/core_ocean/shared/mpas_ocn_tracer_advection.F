@@ -33,7 +33,7 @@ module ocn_tracer_advection
    use ocn_tracer_advection_mono
 
    use ocn_constants
-   use ocn_mesh, only: ocnMesh
+   use ocn_mesh, only: highOrderAdvectionMask,edgeSignOnCell
 
    implicit none
    private
@@ -111,8 +111,6 @@ module ocn_tracer_advection
          nAdvCellsForEdge  ! number of advective cells for each edge
       integer, dimension(:,:), pointer, contiguous :: &!
          advCellsForEdge   ! index of advective cells for each edge
-      real (kind=RKIND), dimension(:,:), pointer :: &
-         highOrderAdvectionMask, edgeSignOnCell
          
       ! end of preamble
       !----------------
@@ -134,9 +132,6 @@ module ocn_tracer_advection
       ! determine whether active tracer budgets should be computed
       computeBudgets = (budgetDiagsOn .and. tracerGroupName == 'activeTracers')
 
-      highOrderAdvectionMask => ocnMesh%highOrderAdvectionMask
-      edgeSignOnCell         => ocnMesh%edgeSignOnCell
-      
       ! call specific advection routine based on choice of monotonicity
       if (monotonicOn) then
          call ocn_tracer_advection_mono_tend(tend, tracers, layerThickness,    &
