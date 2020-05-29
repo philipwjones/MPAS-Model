@@ -25,7 +25,7 @@ module ocn_vel_hadv_coriolis
    use mpas_derived_types
    use mpas_pool_routines
    use ocn_constants
-   use ocn_mesh, only: ocnMesh
+   use ocn_mesh, only: edgeMask
 
    implicit none
    private
@@ -118,7 +118,7 @@ contains
 
       integer, dimension(:), pointer :: maxLevelEdgeTop, nEdgesOnEdge
       integer, dimension(:,:), pointer :: cellsOnEdge, edgesOnEdge
-      real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge, edgeMask
+      real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge
       real (kind=RKIND), dimension(:), pointer :: dcEdge
 
       integer :: j, k
@@ -147,7 +147,6 @@ contains
 
       nEdges = nEdgesArray( 1 )
       mxlvl = maxval(maxLevelEdgeTop)
-      edgeMask => ocnMesh%edgeMask
       
 #ifdef MPAS_OPENACC
 	  !$omp master

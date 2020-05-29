@@ -28,7 +28,7 @@ module ocn_vel_pressure_grad
    use mpas_log
 
    use ocn_constants
-   use ocn_mesh, only: ocnMesh
+   use ocn_mesh, only: edgeMask
 
    implicit none
    private
@@ -140,7 +140,6 @@ contains
       integer, dimension(:,:), pointer :: cellsOnEdge
 
       real (kind=RKIND), dimension(:), pointer :: dcEdge
-      real (kind=RKIND), dimension(:,:), pointer :: edgeMask
       real (kind=RKIND), dimension(:,:), allocatable :: FXTop, work1, work2
       real (kind=RKIND) :: invdcEdge, pGrad, sumAJTop, AJTop, FC, FCPrev, alpha, beta, jacdd
 	  real (kind=RKIND) :: common_level_weight ! ACC can't transfer pointers to scalar
@@ -163,8 +162,6 @@ contains
       call mpas_pool_get_array(meshPool, 'maxLevelCell', maxLevelCell)
       call mpas_pool_get_array(meshPool, 'cellsOnEdge', cellsOnEdge)
       call mpas_pool_get_array(meshPool, 'dcEdge', dcEdge)
-
-      edgeMask => ocnMesh%edgeMask
       
 #ifdef MPAS_OPENACC
 	  !$omp master

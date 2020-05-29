@@ -35,7 +35,7 @@ module ocn_diagnostics
    use ocn_equation_of_state
    use ocn_thick_ale
    use ocn_diagnostics_routines
-   use ocn_mesh, only: ocnMesh
+   use ocn_mesh, only: edgeSignOnCell, cellMask, edgeMask, areaCell
    
    implicit none
    private
@@ -125,10 +125,8 @@ contains
       real (kind=RKIND), dimension(:,:), allocatable:: div_hu,div_huTransport,div_huGMBolus
 
       real (kind=RKIND), dimension(:), pointer :: &
-        bottomDepth, fVertex, dvEdge, dcEdge, areaCell, areaTriangle, ssh,  seaIcePressure, atmosphericPressure, frazilSurfacePressure, &
+        bottomDepth, fVertex, dvEdge, dcEdge, areaTriangle, ssh,  seaIcePressure, atmosphericPressure, frazilSurfacePressure, &
         pressureAdjustedSSH, gradSSH, landIcePressure, landIceDraft
-      real (kind=RKIND), dimension(:,:), pointer :: &
-        edgeSignOnCell, cellMask, edgeMask
       real (kind=RKIND), dimension(:,:), pointer :: &
         weightsOnEdge, kiteAreasOnVertex, layerThicknessEdge, layerThickness, normalVelocity, normalTransportVelocity, &
         normalGMBolusVelocity, tangentialVelocity, pressure, circulation, kineticEnergyCell, montgomeryPotential, &
@@ -173,10 +171,6 @@ contains
       
       call mpas_timer_start('diagnostic solve')
 
-      edgeSignOnCell => ocnMesh%edgeSignOnCell
-      cellMask       => ocnMesh%cellMask
-      edgeMask       => ocnMesh%edgeMask
-      
       if (present(timeLevelIn)) then
          timeLevel = timeLevelIn
       else
@@ -244,7 +238,6 @@ contains
       call mpas_pool_get_array(meshPool, 'edgesOnVertex', edgesOnVertex)
       call mpas_pool_get_array(meshPool, 'dcEdge', dcEdge)
       call mpas_pool_get_array(meshPool, 'dvEdge', dvEdge)
-      call mpas_pool_get_array(meshPool, 'areaCell', areaCell)
       call mpas_pool_get_array(meshPool, 'areaTriangle', areaTriangle)
       call mpas_pool_get_array(meshPool, 'bottomDepth', bottomDepth)
       call mpas_pool_get_array(meshPool, 'fVertex', fVertex)
@@ -1468,8 +1461,6 @@ contains
          ALE_Thickness, & !> ALE thickness at new time
          div_hu           !> divergence of (thickness*velocity)
       type (field2DReal), pointer :: ALE_ThicknessField, div_huField
-      real (kind=RKIND), dimension(:,:), pointer :: &
-        edgeSignOnCell
 
       character (len=StrKIND), pointer :: config_vert_coord_movement
 
@@ -1505,7 +1496,6 @@ contains
       div_hu => div_huField % array
       projectedSSH => projectedSSHField % array
       ALE_Thickness => ALE_ThicknessField % array
-      edgeSignOnCell => ocnMesh%edgeSignOnCell
       
 #ifdef MPAS_OPENACC
 	  !$omp master
@@ -2155,7 +2145,7 @@ contains
 
       integer, dimension(:), pointer :: landIceMask
 
-      real (kind=RKIND), dimension(:,:), pointer :: kineticEnergyCell, layerThickness, normalVelocity, cellMask, &
+      real (kind=RKIND), dimension(:,:), pointer :: kineticEnergyCell, layerThickness, normalVelocity, &
                                                     landIceBoundaryLayerTracers, landIceTracerTransferVelocities
       real (kind=RKIND), dimension(:,:,:), pointer :: activeTracers
       type (field1DReal), pointer :: boundaryLayerTemperatureField, boundaryLayerSalinityField
@@ -2177,8 +2167,6 @@ contains
       end if
 
       call mpas_timer_start("land_ice_diagnostic_fields", .false.)
-
-      cellMask => ocnMesh%cellMask
       
       jenkinsOn = .false.
       hollandJenkinsOn = .false.
