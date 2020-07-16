@@ -25,30 +25,26 @@ module ocn_thick_ale
    use mpas_timer
 
    use ocn_constants
+   use ocn_config
+   use ocn_mesh
 
    implicit none
    private
    save
 
    !--------------------------------------------------------------------
-   !
    ! Public parameters
-   !
    !--------------------------------------------------------------------
 
    !--------------------------------------------------------------------
-   !
    ! Public member functions
-   !
    !--------------------------------------------------------------------
 
    public :: ocn_ALE_thickness, &
              ocn_thick_ale_init
 
    !--------------------------------------------------------------------
-   !
    ! Private module variables
-   !
    !--------------------------------------------------------------------
 
    integer :: configALEthicknessProportionality
@@ -71,12 +67,11 @@ contains
 !>  (z-tilde), and imposes a minimum layer thickness.
 !
 !-----------------------------------------------------------------------
+
    subroutine ocn_ALE_thickness(meshPool, verticalMeshPool, SSH, ALE_thickness, err, newHighFreqThickness)!{{{
 
       !-----------------------------------------------------------------
-      !
       ! input variables
-      !
       !-----------------------------------------------------------------
 
       type (mpas_pool_type), intent(in) :: &
@@ -92,9 +87,7 @@ contains
          newHighFreqThickness   !< Input: high frequency thickness.  Alters ALE thickness.
 
       !-----------------------------------------------------------------
-      !
       ! output variables
-      !
       !-----------------------------------------------------------------
 
       real (kind=RKIND), dimension(:,:), intent(out) :: &
@@ -103,9 +96,7 @@ contains
       integer, intent(out) :: err !< Output: error flag
 
       !-----------------------------------------------------------------
-      !
       ! local variables
-      !
       !-----------------------------------------------------------------
 
       integer :: iCell, k, i, kMax
@@ -261,6 +252,7 @@ contains
 !>  other diagnostics routines.
 !
 !-----------------------------------------------------------------------
+
    subroutine ocn_thick_ale_init(err)!{{{
       integer, intent(out) :: err !< Output: Error flag
       character (len=StrKIND), pointer :: config_ALE_thickness_proportionality

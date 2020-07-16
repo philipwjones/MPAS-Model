@@ -38,6 +38,7 @@ module ocn_analysis_mode
    use ocn_equation_of_state
    use ocn_constants
    use ocn_config
+   use ocn_mesh
 
    private
 
@@ -106,7 +107,9 @@ module ocn_analysis_mode
       call mpas_timer_stop('io_reset_alarms')
 
       ! Initialize submodules before initializing blocks.
-      call ocn_equation_of_state_init(domain, err_tmp)
+      call ocn_meshCreate(domain)
+
+      call ocn_equation_of_state_init(err_tmp)
       ierr = ior(ierr, err_tmp)
 
       call ocn_analysis_init(domain, err_tmp)

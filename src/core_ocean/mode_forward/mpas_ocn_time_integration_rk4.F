@@ -860,7 +860,8 @@ module ocn_time_integration_rk4
       endif
       call mpas_threading_barrier()
 
-      call ocn_tend_vel(tendPool, provisStatePool, forcingPool, diagnosticsPool, meshPool, scratchPool, 1, dt)
+      call ocn_tend_vel(tendPool, provisStatePool, forcingPool, &
+                        diagnosticsPool, 1, dt)
       call mpas_threading_barrier()
 
    end subroutine ocn_time_integrator_rk4_compute_vel_tends!}}}
@@ -1061,7 +1062,8 @@ module ocn_time_integration_rk4
       endif
       call mpas_threading_barrier()
 
-      call ocn_tend_vel(tendPool, provisStatePool, forcingPool, diagnosticsPool, meshPool, scratchPool, 1, dt)
+      call ocn_tend_vel(tendPool, provisStatePool, forcingPool, &
+                        diagnosticsPool, 1, dt)
       call mpas_threading_barrier()
 
       if (associated(highFreqThicknessProvis)) then
@@ -1455,7 +1457,7 @@ module ocn_time_integration_rk4
       call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, diagnosticsPool, scratchPool, tracersPool, 2)
       call mpas_threading_barrier()
 
-      call ocn_vmix_implicit(dt, meshPool, diagnosticsPool, statePool, forcingPool, scratchPool, err, 2)
+      call ocn_vmix_implicit(dt, diagnosticsPool, statePool, forcingPool, err, 2)
       call mpas_threading_barrier()
 
    end subroutine ocn_time_integrator_rk4_cleanup!}}}

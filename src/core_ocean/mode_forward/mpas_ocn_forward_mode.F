@@ -254,9 +254,6 @@ module ocn_forward_mode
       call ocn_vmix_init(domain, err_tmp)
       ierr = ior(ierr, err_tmp)
 
-      call ocn_equation_of_state_init(domain, err_tmp)
-      ierr = ior(ierr, err_tmp)
-
       call ocn_tendency_init(err_tmp)
       ierr = ior(ierr,err_tmp)
       call ocn_diagnostics_init(err_tmp)
@@ -283,6 +280,7 @@ module ocn_forward_mode
       call ocn_init_routines_compute_max_level(domain)
 
       call ocn_time_integration_split_init(domain)
+
 
       call mpas_log_write(' Vertical coordinate movement is: ' // trim(config_vert_coord_movement))
 
@@ -326,6 +324,9 @@ module ocn_forward_mode
 
       ! fill the ocean mesh structure
       call ocn_meshCreate(domain)
+
+      call ocn_equation_of_state_init(err_tmp)
+      ierr = ior(ierr, err_tmp)
 
       timeStep = mpas_get_clock_timestep(domain % clock, ierr=err_tmp)
       call mpas_get_timeInterval(timeStep, dt=dt)
