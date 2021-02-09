@@ -873,8 +873,18 @@ contains
       !
 
       nCells = nCellsHalo( 2 )
+#ifdef MPAS_OPENACC
+      !$acc enter data copyin(normalVelocity)
+      !$acc update device(zMid, BruntVaisalaFreqTop, edgeAreaFractionOfCell)
+
+      !$acc parallel loop gang vector &
+      !$acc          present(RiTopOfCell, maxLevelCell, nEdgesOnCell, edgesOnCell, normalVelocity, &
+      !$acc                  edgeAreaFractionOfCell, zMid, BruntVaisalaFreqTop) &
+      !$acc          private(k, i, iEdge, delU2, shearSquared, shearMean)
+#else
       !$omp parallel
       !$omp do schedule(runtime) private(invAreaCell1, k, shearSquared, i, iEdge, delU2, shearMean)
+#endif
       do iCell=1,nCells
          RiTopOfCell(:,iCell) = 100.0_RKIND
          do k=2,maxLevelCell(iCell)
@@ -891,8 +901,13 @@ contains
           end do
           RiTopOfCell(1,iCell) = RiTopOfCell(2,iCell)
       end do
+#ifdef MPAS_OPENACC
+      !$acc update host(RiTopOfCell)
+      !$acc exit data delete(normalVelocity)
+#else
       !$omp end do
       !$omp end parallel
+#endif
 
    end subroutine ocn_diagnostic_solve_richardson!}}}
 
