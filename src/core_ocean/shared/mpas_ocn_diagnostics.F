@@ -314,12 +314,21 @@ contains
       end do
       !$omp end do
 
+#ifdef MPAS_OPENACC
+      !$acc parallel loop gang vector &
+      !$acc          present(normalVelocity, normalVelocitySurfaceLayer)
+#else
       !$omp do schedule(runtime)
+#endif
       do iEdge = 1, nEdges
          normalVelocitySurfaceLayer(iEdge) = normalVelocity(1, iEdge)
       end do
+#ifdef MPAS_OPENACC
+      !$acc update host(normalVelocitySurfaceLayer)
+#else
       !$omp end do
       !$omp end parallel
+#endif
 
       if ( full_compute ) then
 
@@ -421,9 +430,22 @@ contains
 
       err = 0
 
+#ifdef MPAS_OPENACC
+      !$acc enter data copyin(normalVelocity)
+
+      !$acc parallel loop gang vector &
+      !$acc          present(circulation, relativeVorticity, areaTriangle, edgesOnVertex, &
+      !$acc                  maxLevelVertexBot, dcEdge, normalVelocity, edgeSignOnVertex) &
+      !$acc          private(invAreaTri1, i, iEdge, k, r_tmp)
+#else
       !$omp parallel
       !$omp do schedule(runtime) private(invAreaTri1, i, iEdge, k, r_tmp)
+<<<<<<< HEAD
       do iVertex = 1, nVertices
+=======
+#endif
+      do iVertex = 1, nVerticesAll
+>>>>>>> Port ocn_relativeVorticity_circulation to GPU
          circulation(:, iVertex) = 0.0_RKIND
          relativeVorticity(:, iVertex) = 0.0_RKIND
          invAreaTri1 = 1.0_RKIND / areaTriangle(iVertex)
@@ -437,8 +459,13 @@ contains
             end do
          end do
       end do
+#ifdef MPAS_OPENACC
+      !$acc update host(circulation, relativeVorticity)
+      !$acc exit data delete(normalVelocity)
+#else
       !$omp end do
       !$omp end parallel
+#endif
 
    !--------------------------------------------------------------------
 
@@ -1045,7 +1072,7 @@ contains
         surfaceLayerDepth = config_cvmix_kpp_surface_layer_averaging
 
 #ifdef MPAS_OPENACC
-        !$acc enter data copyin(layerThickness, activeTracers)
+        !$acc enter data copyin(activeTracers)
 
         !$acc parallel loop gang vector &
         !$acc          present(tracersSurfaceLayerValue, indexSurfaceLayerDepth, maxLevelCell, &
@@ -1053,7 +1080,7 @@ contains
         !$acc          private(sumSurfaceLayer, k, rSurfaceLayer)
 #else
         !$omp parallel
-        !$omp do schedule(runtime) private(surfaceLayerDepth, sumSurfaceLayer, k, rSurfaceLayer)
+        !$omp do schedule(runtime) private(sumSurfaceLayer, k, rSurfaceLayer)
 #endif
         do iCell=1,nCells
           sumSurfaceLayer=0.0_RKIND
@@ -1079,7 +1106,7 @@ contains
         enddo
 #ifdef MPAS_OPENACC
         !$acc update host(tracersSurfaceLayerValue, indexSurfaceLayerDepth)
-        !$acc exit data delete(layerThickness, activeTracers)
+        !$acc exit data delete(activeTracers)
 #else
         !$omp end do
         !$omp end parallel
@@ -1869,7 +1896,6 @@ contains
       integer :: iEdge, iCell, k, i, nCells
 
       real (kind=RKIND) :: flux, invAreaCell, div_hu_btr
-      integer, dimension(:, :), pointer :: edgeSignOnCell
 
       ! Scratch Arrays
       ! projectedSSH: projected SSH at a new time
@@ -1888,8 +1914,6 @@ contains
         vertAleTransportTop=0.0_RKIND
         return
       end if
-
-      call mpas_pool_get_array(meshPool, 'edgeSignOnCell', edgeSignOnCell)
 
       ncells = nCellsAll
 
