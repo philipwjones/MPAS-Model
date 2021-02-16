@@ -495,8 +495,6 @@ contains
    subroutine ocn_diagnostic_solve_layerThicknessEdge(normalVelocity, layerThickness, &
                 layerThicknessEdge)!{{{
 
-      use ocn_mesh   ! debug, mdt :: this should be module-level
-
       implicit none
 
       !-----------------------------------------------------------------
@@ -593,8 +591,6 @@ contains
 !-----------------------------------------------------------------------
    subroutine ocn_diagnostic_solve_kineticEnergy(normalVelocity, &
                 kineticEnergyCell)!{{{
-
-      use ocn_mesh   ! debug, mdt :: this should be module-level
 
       implicit none
 
@@ -701,8 +697,6 @@ contains
                 layerThickness, relativeVorticity, &
                 normalizedRelativeVorticityEdge, normalizedPlanetaryVorticityEdge, &
                 normalizedRelativeVorticityCell)!{{{
-
-      use ocn_mesh   ! debug, mdt :: this should be module-level
 
       implicit none
 
@@ -927,8 +921,6 @@ contains
    subroutine ocn_diagnostic_solve_richardson(displacedDensity, density, zMid, &
                 normalVelocity, edgeAreaFractionOfCell, BruntVaisalaFreqTop, RiTopOfCell)!{{{
 
-      use ocn_mesh   ! debug, mdt :: this should be module-level
-
       implicit none
 
       !-----------------------------------------------------------------
@@ -1049,8 +1041,6 @@ contains
                 layerThicknessEdge, normalVelocity, tracersSurfaceLayerValue,  &
                 indexSurfaceLayerDepth, normalVelocitySurfaceLayer, &
                 surfaceFluxAttenuationCoefficient, surfaceFluxAttenuationCoefficientRunoff)!{{{
-
-      use ocn_mesh   ! debug, mdt :: this should be module-level
 
       implicit none
 
@@ -1399,7 +1389,7 @@ contains
 =======
 
 #ifdef MPAS_OPENACC
-      !$acc parallel loop gang &
+      !$acc parallel loop gang vector &
       !$acc          present(tangentialVelocity, nEdgesOnEdge, edgesOnEdge, weightsOnEdge, &
       !$acc                  maxLevelEdgeTop, normalVelocity) &
       !$acc          private(i, eoe, weightsOnEdge_temp, k) 
@@ -1613,8 +1603,6 @@ contains
    subroutine ocn_diagnostic_solve_pressure(forcingPool, layerThickness, density, &
                 surfacePressure, montgomeryPotential, pressure)!{{{
 
-      use ocn_mesh     ! debug, mdt :: this should be module-level
-
       implicit none
 
       !-----------------------------------------------------------------
@@ -1775,8 +1763,6 @@ contains
 !-----------------------------------------------------------------------
    subroutine ocn_diagnostic_solve_ssh(forcingPool, ssh, seaIcePressure, pressureAdjustedSSH, &
                 gradSSH)!{{{
-
-      use ocn_mesh     ! debug, mdt :: this should be module-level
 
       implicit none
 
@@ -1952,8 +1938,19 @@ contains
       ! thickness-weighted divergence and barotropic divergence
       !
       ! See Ringler et al. (2010) jcp paper, eqn 19, 21, and fig. 3.
+#ifdef MPAS_OPENACC
+      !$acc enter data create(div_hu, projectedSSH, ALE_Thickness)
+
+! DEBUG, MDT :: need to add OpenACC
+!      !$acc parallel loop &
+!      !$acc          present(div_hu, invAreaCell, nEdgesOnCell, edgesOnCell, maxLevelEdgeTop, &
+!      !$acc                  layerThicknessEdge, normalVelocity, dvEdge, edgeSignOnCell, &
+!      !$acc                  oldSSH, projectedSSH) &
+!      !$acc          private(div_hu_btr, invAreaCell1, i, iEdge, flux, k)
+#else
       !$omp parallel
       !$omp do schedule(runtime) private(invAreaCell1, i, iEdge, k, flux, div_hu_btr)
+#endif
       do iCell = 1, nCells
          div_hu(:,iCell) = 0.0_RKIND
          div_hu_btr = 0.0_RKIND
@@ -1970,8 +1967,12 @@ contains
          end do
          projectedSSH(iCell) = oldSSH(iCell) - dt*div_hu_btr
       end do
+!#ifdef MPAS_OPENACC
+!      !$acc update host(projectedSSH)
+!#else
       !$omp end do
       !$omp end parallel
+!#endif
 
       !
       ! Compute desired thickness at new time
@@ -1989,8 +1990,17 @@ contains
       ! Here we are using solving the continuity equation for vertAleTransportTop ($w^t$),
       ! and using ALE_Thickness for thickness at the new time.
 
+#ifdef MPAS_OPENACC
+      !$acc update device(div_hu, ALE_Thickness)
+
+      !$acc parallel loop gang vector &
+      !$acc          present(vertAleTransportTop, maxLevelCell, div_hu, ALE_Thickness, &
+      !$acc                  oldLayerThickness) &
+      !$acc          private(k)
+#else
       !$omp parallel
       !$omp do schedule(runtime) private(k)
+#endif
       do iCell = 1,nCells
          vertAleTransportTop(1,iCell) = 0.0_RKIND
          vertAleTransportTop(maxLevelCell(iCell)+1,iCell) = 0.0_RKIND
@@ -1999,8 +2009,12 @@ contains
               - (ALE_Thickness(k,iCell) - oldLayerThickness(k,iCell))/dt
          end do
       end do
+#ifdef MPAS_OPENACC
+      !$acc exit data delete(div_hu, projectedSSH, ALE_Thickness)
+#else
       !$omp end do
       !$omp end parallel
+#endif
 
       deallocate(div_hu, &
                  projectedSSH, &
