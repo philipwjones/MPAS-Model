@@ -308,9 +308,7 @@ module ocn_tracer_advection_mono
            tracerCur(k,iCell) = tracers(iTracer,k,iCell)
         end do ! k loop
         end do ! iCell loop
-#ifdef MPAS_OPENACC
-        !$acc update host(tracerCur) async(1)
-#else
+#ifndef MPAS_OPENACC
         !$omp end do
         !$omp end parallel
 #endif        
@@ -425,9 +423,7 @@ module ocn_tracer_advection_mono
                                   -  lowOrderFlx(k,iEdge)
           end do ! k loop
         end do ! iEdge loop
-#ifdef MPAS_OPENACC
-        !$acc update host(lowOrderFlx,highOrderFlx) async(1)
-#else
+#ifndef MPAS_OPENACC
         !$omp end do
         !$omp end parallel
 #endif        
@@ -553,9 +549,7 @@ module ocn_tracer_advection_mono
                                     min(flxIn (k,cell1), flxOut(k,cell2))
           end do ! k loop
         end do ! iEdge loop
-#ifdef MPAS_OPENACC
-        !$acc update host(highOrderFlx) async(1)
-#else
+#ifndef MPAS_OPENACC
         !$omp end do
         !$omp end parallel
 #endif        
@@ -564,9 +558,6 @@ module ocn_tracer_advection_mono
         call mpas_timer_start('flux accumulate')
 #endif
 
-!#ifdef MPAS_OPENACC
-!        !$acc update device(tend) async(1)
-!#endif
         nCells = nCellsArray( 1 )
         ! Accumulate the scaled high order vertical tendencies, and the upwind tendencies
 #ifdef MPAS_OPENACC
@@ -723,9 +714,7 @@ module ocn_tracer_advection_mono
             endif   
           end do ! k loop
         end do ! iCell loop
-#ifdef MPAS_OPENACC
-        !$acc update host(highOrderFlx,workTend) async(1)
-#else
+#ifndef MPAS_OPENACC
         !$omp end do
         !$omp end parallel
 #endif
