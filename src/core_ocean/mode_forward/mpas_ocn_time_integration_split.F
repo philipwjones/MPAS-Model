@@ -503,14 +503,14 @@ module ocn_time_integration_split
 #ifdef MPAS_OPENACC
               !$acc enter data copyin(highFreqThicknessNew)
 #endif
-              call ocn_vert_transport_velocity_top(meshPool, verticalMeshPool, scratchPool, &
+              call ocn_vert_transport_velocity_top(meshPool, verticalMeshPool, &
                  layerThicknessCur, layerThickEdge, normalVelocityCur, &
                  sshCur, dt, vertAleTransportTop, err, highFreqThicknessNew)
 #ifdef MPAS_OPENACC
               !$acc exit data delete(highFreqThicknessNew)
 #endif
             else
-               call ocn_vert_transport_velocity_top(meshPool, verticalMeshPool, scratchPool, &
+               call ocn_vert_transport_velocity_top(meshPool, verticalMeshPool, &
                   layerThicknessCur, layerThickEdge, normalVelocityCur, &
                   sshCur, dt, vertAleTransportTop, err)
             endif
@@ -1467,27 +1467,27 @@ module ocn_time_integration_split
             ! layerThickness has not yet been computed for time level 2.
             call mpas_timer_start('thick vert trans vel top')
 #ifdef MPAS_OPENACC
-            !$acc enter data copyin(layerThicknessCur, normalTransportVelocity, sshCur)
-            !$acc update device(layerThickEdge)
+            !$acc enter data copyin(layerThicknessCur, sshCur)
+            !$acc update device(layerThickEdge, normalTransportVelocity)
 #endif
             if (associated(highFreqThicknessNew)) then
 #ifdef MPAS_OPENACC
                !$acc enter data copyin(highFreqThicknessNew)
 #endif
-               call ocn_vert_transport_velocity_top(meshPool, verticalMeshPool, scratchPool, &
+               call ocn_vert_transport_velocity_top(meshPool, verticalMeshPool, &
                  layerThicknessCur, layerThickEdge, normalTransportVelocity, &
                  sshCur, dt, vertAleTransportTop, err, highFreqThicknessNew)
 #ifdef MPAS_OPENACC
                !$acc exit data delete(highFreqThicknessNew)
 #endif
             else
-               call ocn_vert_transport_velocity_top(meshPool, verticalMeshPool, scratchPool, &
+               call ocn_vert_transport_velocity_top(meshPool, verticalMeshPool, &
                  layerThicknessCur, layerThickEdge, normalTransportVelocity, &
                  sshCur, dt, vertAleTransportTop, err)
             endif
 #ifdef MPAS_OPENACC
-            !$acc exit data delete(layerThicknessCur, normalTransportVelocity, sshCur)
-            !$acc update host(vertAleTransportTop)
+            !$acc exit data delete(layerThicknessCur, sshCur)
+            !$acc update host(vertAleTransportTop, normalTransportVelocity)
 #endif
             call mpas_timer_stop('thick vert trans vel top')
 
