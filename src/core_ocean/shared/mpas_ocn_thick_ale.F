@@ -16,6 +16,7 @@
 !>  This module contains the routines for computing ALE thickness.
 !
 !-----------------------------------------------------------------------
+#undef MPAS_OPENACC
 
 module ocn_thick_ale
 
@@ -74,6 +75,8 @@ contains
 !-----------------------------------------------------------------------
    subroutine ocn_ALE_thickness(meshPool, verticalMeshPool, SSH, ALE_thickness, err, newHighFreqThickness)!{{{
 
+      use ocn_mesh, only: maxLevelCell
+      
       !-----------------------------------------------------------------
       !
       ! input variables
@@ -111,8 +114,7 @@ contains
 
       integer :: iCell, k, i, kMax
       integer, pointer :: nVertLevels
-      integer :: nCells
-      integer, dimension(:), pointer :: maxLevelCell
+      integer :: nCells, mxlvl
       integer, dimension(:), pointer :: nCellsArray
 
       real (kind=RKIND) :: weightSum, thicknessSum, remainder, newThickness, thicknessWithRemainder
@@ -130,7 +132,6 @@ contains
 
       call mpas_pool_get_package(ocnPackages, 'thicknessFilterActive', thicknessFilterActive)
 
-      call mpas_pool_get_array(meshPool, 'maxLevelCell', maxLevelCell)
       call mpas_pool_get_array(meshPool, 'vertCoordMovementWeights', vertCoordMovementWeights)
 
       call mpas_pool_get_array(verticalMeshPool, 'restingThickness', restingThickness)
@@ -142,14 +143,26 @@ contains
          min_ALE_thickness_down(nVertLevels), min_ALE_thickness_up(nVertLevels))
 
       nCells = nCellsArray( 2 )
+#ifdef MPAS_OPENACC
+!      !$acc enter data copyin(ALE_Thickness,vertCoordMovementWeights,restingThickness,SSH) &
+      !$acc enter data copyin(vertCoordMovementWeights,restingThickness) &
+      !$acc            async(1)
+#endif
 
       !
       ! ALE thickness alteration due to SSH (z-star)
       !
       if (configALEthicknessProportionality==1) then ! restingThickness_times_weights
 
+#ifdef MPAS_OPENACC
+         !$acc parallel loop &
+         !$acc          present(ALE_Thickness,SSH,vertCoordMovementWeights,&
+         !$acc                  maxLevelCell,restingThickness) &
+         !$acc          private(thicknessSum, kMax) async(1)
+#else
          !$omp parallel
          !$omp do schedule(runtime) private(kMax, thicknessSum, k)
+#endif
          do iCell = 1, nCells
             kMax = maxLevelCell(iCell)
    
@@ -166,12 +179,21 @@ contains
                     / thicknessSum
             end do
          enddo
+#ifndef MPAS_OPENACC
          !$omp end do
          !$omp end parallel
+#endif
    
          elseif (configALEthicknessProportionality==2) then ! weights_only
+#ifdef MPAS_OPENACC
+         !$acc parallel loop &
+         !$acc          present(ALE_Thickness,SSH,vertCoordMovementWeights,&
+         !$acc                  maxLevelCell,restingThickness) &
+         !$acc          private(weightSum, kMax) async(1)
+#else
          !$omp parallel
          !$omp do schedule(runtime) private(kMax, weightSum, k)
+#endif
          do iCell = 1, nCells
             kMax = maxLevelCell(iCell)
    
@@ -190,23 +212,43 @@ contains
    
             end do
          enddo
+#ifndef MPAS_OPENACC
          !$omp end do
          !$omp end parallel
+#endif
       endif
 
       if (thicknessFilterActive) then
+         mxlvl = maxval(maxLevelCell)
+#ifdef MPAS_OPENACC
+         !$acc parallel loop gang vector collapse(2) copyin(newHighFreqThickness) &
+         !$acc          present(ALE_Thickness,vertCoordMovementWeights, &
+         !$acc                  maxLevelCell,restingThickness) &
+         !$acc          private(thicknessSum, kMax) async(1)
+#else
          !$omp parallel
          !$omp do schedule(runtime) private(kMax)
+#endif
          do iCell = 1, nCells
-            kMax = maxLevelCell(iCell)
+            do k = 1,mxlvl
+               if ( k <= maxLevelCell(iCell) ) then
 
-            ALE_thickness(1:kMax, iCell) = &
-                ALE_thickness(1:kMax, iCell) &
-              + newHighFreqThickness(1:kMax,iCell)
+                  ALE_Thickness(k, iCell) = &
+                      ALE_Thickness(k, iCell) &
+                      + newHighFreqThickness(k,iCell)
+               endif
+            enddo
          enddo
+#ifndef MPAS_OPENACC
          !$omp end do
          !$omp end parallel
+#endif
       end if
+
+#ifdef MPAS_OPENACC
+      !$acc update host(ALE_Thickness) async(1)
+      !$acc wait
+#endif
 
       !
       ! ALE thickness alteration due to minimum and maximum thickness
@@ -251,6 +293,12 @@ contains
          !$omp end parallel
 
       endif ! config_use_min_max_thickness
+
+#ifdef MPAS_OPENACC
+      !$acc wait
+      !!$acc exit data delete(ALE_Thickness,vertCoordMovementWeights,restingThickness,SSH)
+      !$acc exit data delete(vertCoordMovementWeights,restingThickness)
+#endif
 
       deallocate(prelim_ALE_thickness, min_ALE_thickness_down, min_ALE_thickness_up)
 
