@@ -144,7 +144,6 @@ contains
 
       nCells = nCellsArray( 2 )
 #ifdef MPAS_OPENACC
-!      !$acc enter data copyin(ALE_Thickness,vertCoordMovementWeights,restingThickness,SSH) &
       !$acc enter data copyin(vertCoordMovementWeights,restingThickness) &
       !$acc            async(1)
 #endif
@@ -247,13 +246,16 @@ contains
 
 #ifdef MPAS_OPENACC
       !$acc update host(ALE_Thickness) async(1)
-      !$acc wait
 #endif
 
       !
       ! ALE thickness alteration due to minimum and maximum thickness
       !
       if (config_use_min_max_thickness) then
+
+#ifdef MPAS_OPENACC
+         !$acc wait
+#endif
 
          !$omp parallel
          !$omp do schedule(runtime) &
@@ -295,8 +297,6 @@ contains
       endif ! config_use_min_max_thickness
 
 #ifdef MPAS_OPENACC
-      !$acc wait
-      !!$acc exit data delete(ALE_Thickness,vertCoordMovementWeights,restingThickness,SSH)
       !$acc exit data delete(vertCoordMovementWeights,restingThickness)
 #endif
 

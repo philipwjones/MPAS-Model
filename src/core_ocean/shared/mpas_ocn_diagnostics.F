@@ -1699,27 +1699,17 @@ contains
       !
       ! See Ringler et al. (2010) jcp paper, eqn 19, 21, and fig. 3.
 #ifdef MPAS_OPENACC
-      !$acc enter data copyin(oldLayerThickness,layerThicknessEdge,oldSSH, &
-      !$acc            normalVelocity,edgeSignOnCell) &
-      !$acc            create(projectedSSH,ALE_thickness,div_hu,vertAleTransportTop) async(1)
+      !$acc enter data copyin(oldLayerThickness) &
+      !$acc            create(projectedSSH,ALE_thickness,vertAleTransportTop,div_hu) async(1)
 #endif
 
-#if 0
-!#ifdef MPAS_OPENACC
-      !$acc parallel loop &
-      !$acc          present(areaCell,nEdgesOnCell,edgesOnCell,maxLevelEdgeBot,layerThicknessEdge, &
-      !$acc                  normalVelocity,dvEdge,edgeSignOnCell,projectedSSH,oldSSH,div_hu,maxLevelEdgeTop) &
-      !$acc          private(flux, iEdge, div_hu_btr, invAreaCell,i,k) async(1)
-#else
       !$omp parallel
       !$omp do schedule(runtime) private(invAreaCell, i, iEdge, k, flux, div_hu_btr)
-#endif
       do iCell = 1, nCells
          div_hu_btr = 0.0_RKIND
          invAreaCell = 1.0_RKIND / areaCell(iCell)
          do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
-
             do k = 1, maxLevelEdgeTop(iEdge)
                flux = layerThicknessEdge(k, iEdge) * normalVelocity(k, iEdge) * dvEdge(iEdge) * edgeSignOnCell(i, iCell) &
                     * invAreaCell
@@ -1729,14 +1719,9 @@ contains
          end do
          projectedSSH(iCell) = oldSSH(iCell) - dt*div_hu_btr
       end do
-#if 0      
-!#ifdef MPAS_OPENACC
-      !$acc update host(projectedSSH,div_hu) async(1)
-      !$acc wait
-#else
       !$omp end do
       !$omp end parallel
-#endif
+
 
 #ifdef MPAS_OPENACC
       !$acc update device(projectedSSH, div_hu) async(1)
@@ -1758,7 +1743,6 @@ contains
       ! Here we are using solving the continuity equation for vertAleTransportTop ($w^t$),
       ! and using ALE_Thickness for thickness at the new time.
 
-!#if 0
 #ifdef MPAS_OPENACC
       !$acc update device(ALE_thickness) async(1)
       
@@ -1778,7 +1762,6 @@ contains
               - (ALE_Thickness(k,iCell) - oldLayerThickness(k,iCell))/dt
          end do
       end do
-!#if 0      
 #ifdef MPAS_OPENACC
       !$acc update host(vertAleTransportTop) async(1)
 #else
@@ -1788,8 +1771,8 @@ contains
 
 #ifdef MPAS_OPENACC
       !$acc wait
-      !$acc exit data delete(layerThicknessEdge, projectedSSH, oldSSH, oldLayerThickness, &
-      !$acc                   ALE_thickness, div_hu, normalVelocity, vertAleTransportTop,edgeSignOnCell)
+      !$acc exit data delete(projectedSSH, oldLayerThickness, &
+      !$acc                   ALE_thickness, div_hu, vertAleTransportTop)
 #endif
       
       deallocate(div_hu, &
