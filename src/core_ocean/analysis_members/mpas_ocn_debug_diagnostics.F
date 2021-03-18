@@ -33,7 +33,7 @@ module ocn_debug_diagnostics
 
    implicit none
    private
-   save
+ 
 
    !--------------------------------------------------------------------
    !

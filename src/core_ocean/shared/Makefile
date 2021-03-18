@@ -81,7 +81,7 @@ mpas_ocn_diagnostics_variables.o: mpas_ocn_config.o
 
 mpas_ocn_mesh.o:
 
-mpas_ocn_thick_ale.o: mpas_ocn_constants.o mpas_ocn_config.o
+mpas_ocn_thick_ale.o: mpas_ocn_constants.o mpas_ocn_config.o mpas_ocn_mesh.o
 
 mpas_ocn_time_average_coupled.o: mpas_ocn_constants.o mpas_ocn_config.o mpas_ocn_tracer_ecosys.o
 

@@ -1606,6 +1606,10 @@ contains
    subroutine ocn_vert_transport_velocity_top(meshPool, verticalMeshPool, scratchPool, oldLayerThickness, layerThicknessEdge, &
      normalVelocity, oldSSH, dt, vertAleTransportTop, err, newHighFreqThickness)!{{{
 
+      !use ocn_mesh, only: edgeSignOnCell, areaCell, nEdgesOnCell, maxLevelEdgeTop, &
+      use ocn_mesh, only: areaCell, nEdgesOnCell, maxLevelEdgeTop, &
+                          maxLevelEdgeBot, edgesOnCell, dvEdge      ! debug, mdt :: this should be module-level
+
       !-----------------------------------------------------------------
       !
       ! input variables
@@ -1659,7 +1663,7 @@ contains
 
       real (kind=RKIND) :: flux, invAreaCell, div_hu_btr
       integer, dimension(:, :), pointer :: edgeSignOnCell
-
+      
       ! Scratch Arrays
       ! projectedSSH: projected SSH at a new time
       !        units: none
@@ -1679,7 +1683,7 @@ contains
       end if
 
       call mpas_pool_get_array(meshPool, 'edgeSignOnCell', edgeSignOnCell)
-
+      
       ncells = nCellsAll
 
       allocate(div_hu(nVertLevels, nCells), &
@@ -1688,20 +1692,24 @@ contains
 
       ! Only need to compute over 0 and 1 halos
       nCells = nCellsHalo( 1 )
+      div_hu = 0.0_RKIND
 
       !
       ! thickness-weighted divergence and barotropic divergence
       !
       ! See Ringler et al. (2010) jcp paper, eqn 19, 21, and fig. 3.
+#ifdef MPAS_OPENACC
+      !$acc enter data copyin(oldLayerThickness) &
+      !$acc            create(projectedSSH,ALE_thickness,vertAleTransportTop,div_hu) async(1)
+#endif
+
       !$omp parallel
       !$omp do schedule(runtime) private(invAreaCell, i, iEdge, k, flux, div_hu_btr)
       do iCell = 1, nCells
-         div_hu(:,iCell) = 0.0_RKIND
          div_hu_btr = 0.0_RKIND
          invAreaCell = 1.0_RKIND / areaCell(iCell)
          do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
-
             do k = 1, maxLevelEdgeTop(iEdge)
                flux = layerThicknessEdge(k, iEdge) * normalVelocity(k, iEdge) * dvEdge(iEdge) * edgeSignOnCell(i, iCell) &
                     * invAreaCell
@@ -1713,6 +1721,11 @@ contains
       end do
       !$omp end do
       !$omp end parallel
+
+
+#ifdef MPAS_OPENACC
+      !$acc update device(projectedSSH, div_hu) async(1)
+#endif
 
       !
       ! Compute desired thickness at new time
@@ -1730,19 +1743,38 @@ contains
       ! Here we are using solving the continuity equation for vertAleTransportTop ($w^t$),
       ! and using ALE_Thickness for thickness at the new time.
 
+#ifdef MPAS_OPENACC
+      !$acc update device(ALE_thickness) async(1)
+      
+      !$acc parallel loop &
+      !$acc          present(vertAleTransportTop,maxLevelCell,div_hu,ALE_Thickness,oldLayerThickness) &
+      !$acc          async(1)
+#else
       !$omp parallel
       !$omp do schedule(runtime) private(k)
+#endif
       do iCell = 1,nCells
          vertAleTransportTop(1,iCell) = 0.0_RKIND
          vertAleTransportTop(maxLevelCell(iCell)+1,iCell) = 0.0_RKIND
+         !$acc loop seq
          do k = maxLevelCell(iCell),2,-1
             vertAleTransportTop(k,iCell) = vertAleTransportTop(k+1,iCell) - div_hu(k,iCell) &
               - (ALE_Thickness(k,iCell) - oldLayerThickness(k,iCell))/dt
          end do
       end do
+#ifdef MPAS_OPENACC
+      !$acc update host(vertAleTransportTop) async(1)
+#else
       !$omp end do
       !$omp end parallel
+#endif
 
+#ifdef MPAS_OPENACC
+      !$acc wait
+      !$acc exit data delete(projectedSSH, oldLayerThickness, &
+      !$acc                   ALE_thickness, div_hu, vertAleTransportTop)
+#endif
+      
       deallocate(div_hu, &
                  projectedSSH, &
                  ALE_Thickness)
@@ -1788,8 +1820,17 @@ contains
       !
       ! Put f*normalBaroclinicVelocity^{perp} in u as a work variable
       !
+#ifdef MPAS_OPENACC
+      !$acc enter data copyin(normalVelocity,normalBaroclinicVelocity) async(1)
+      
+      !$acc parallel loop &
+      !$acc          present(cellsOnEdge,normalVelocity,maxLevelEdgeTop, &
+      !$acc                  normalBaroclinicVelocity,nEdgesOnEdge,edgesOnEdge,fEdge,weightsOnEdge) &
+      !$acc          private(eoe,cell1,cell2) async(1)
+#else
       !$omp parallel
       !$omp do schedule(runtime) private(cell1, cell2, k, eoe)
+#endif
       do iEdge = 1, nEdgesOwned
          cell1 = cellsOnEdge(1,iEdge)
          cell2 = cellsOnEdge(2,iEdge)
@@ -1804,9 +1845,18 @@ contains
             end do
          end do
       end do
+#ifdef MPAS_OPENACC
+      !$acc update host(normalVelocity) async(1)
+      !$acc wait
+#else
       !$omp end do
       !$omp end parallel
+#endif
 
+#ifdef MPAS_OPENACC
+      !$acc wait
+      !$acc exit data delete(normalVelocity,normalBaroclinicVelocity)
+#endif
       call mpas_timer_stop("ocn_fuperp")
 
    end subroutine ocn_fuperp!}}}

@@ -35,7 +35,7 @@ module ocn_pointwise_stats
 
    implicit none
    private
-   save
+ 
 
    !--------------------------------------------------------------------
    !

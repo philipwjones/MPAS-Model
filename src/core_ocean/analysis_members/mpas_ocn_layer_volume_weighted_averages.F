@@ -32,7 +32,7 @@ module ocn_layer_volume_weighted_averages
 
    implicit none
    private
-   save
+ 
 
    !--------------------------------------------------------------------
    !

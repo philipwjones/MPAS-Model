@@ -33,7 +33,7 @@ module ocn_water_mass_census
 
    implicit none
    private
-   save
+ 
 
    !--------------------------------------------------------------------
    !

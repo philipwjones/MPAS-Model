@@ -32,7 +32,7 @@ module ocn_zonal_mean
 
    implicit none
    private
-   save
+ 
 
    !--------------------------------------------------------------------
    !

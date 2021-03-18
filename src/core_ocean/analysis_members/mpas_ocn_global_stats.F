@@ -31,7 +31,7 @@ module ocn_global_stats
 
    implicit none
    private
-   save
+ 
 
    !--------------------------------------------------------------------
    !

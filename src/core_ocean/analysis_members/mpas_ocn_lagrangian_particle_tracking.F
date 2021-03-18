@@ -46,7 +46,7 @@ module ocn_lagrangian_particle_tracking
 
    implicit none
    private
-   save
+ 
 
    !--------------------------------------------------------------------
    !

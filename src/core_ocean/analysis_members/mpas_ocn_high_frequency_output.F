@@ -31,7 +31,7 @@ module ocn_high_frequency_output
 
    implicit none
    private
-   save
+ 
 
    !--------------------------------------------------------------------
    !

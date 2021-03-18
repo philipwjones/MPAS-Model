@@ -33,7 +33,7 @@ module ocn_mixed_layer_depths
 
    implicit none
    private
-   save
+ 
 
    !--------------------------------------------------------------------
    !

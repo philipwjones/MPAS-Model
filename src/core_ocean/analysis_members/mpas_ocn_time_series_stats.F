@@ -26,7 +26,7 @@ module ocn_time_series_stats
 
   implicit none
   private
-  save
+
 
   ! Public parameters
   !--------------------------------------------------------------------
